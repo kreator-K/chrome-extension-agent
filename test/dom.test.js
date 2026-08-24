@@ -33,16 +33,19 @@ const FILES = ['src/lib/util.js', 'src/lib/rules.js', 'src/lib/fields.js']
   assert.ok(!byLabel('optional cover letter'), 'does not claim unrelated file uploads');
   assert.ok(!fields.some((f) => /search/i.test(f.label)), 'skips the search box');
   assert.ok(!fields.some((f) => /csrf/i.test(f.label)), 'skips hidden inputs');
+  assert.strictEqual(byLabel('how did you hear').kind, 'combobox', 'recognizes React-style comboboxes');
+  assert.strictEqual(byLabel('computer science major').value, 'Yes', 'reads an existing React-select value');
 
-  const result = await page.evaluate((ids) => {
+  const result = await page.evaluate(async (ids) => {
     const R = window.RA;
     const out = {};
-    out.text = R.fillField(ids.fn, 'Prashant');
-    out.select = R.fillField(ids.auth, 'Yes');
-    out.radio = R.fillField(ids.sponsor, 'No');
-    out.textarea = R.fillField(ids.why, 'x'.repeat(400));
-    out.checkbox = R.fillField(ids.tos, 'Yes');
-    out.file = R.fillField(ids.resume, {
+    out.text = await R.fillField(ids.fn, 'Prashant');
+    out.select = await R.fillField(ids.auth, 'Yes');
+    out.radio = await R.fillField(ids.sponsor, 'No');
+    out.textarea = await R.fillField(ids.why, 'x'.repeat(400));
+    out.checkbox = await R.fillField(ids.tos, 'Yes');
+    out.combobox = await R.fillField(ids.source, 'Handshake');
+    out.file = await R.fillField(ids.resume, {
       fileName: 'Alex_Rivera_Resume.pdf',
       mimeType: 'application/pdf',
       dataUrl: 'data:application/pdf;base64,JVBERi0xLjQK'
@@ -53,6 +56,7 @@ const FILES = ['src/lib/util.js', 'src/lib/rules.js', 'src/lib/fields.js']
       sponsor: (document.querySelector('input[name=sponsor]:checked') || {}).value,
       whyLen: document.getElementById('why').value.length,
       tos: document.getElementById('tos').checked,
+      source: document.querySelector('#source-combo').closest('.select__value-container').querySelector('.select__single-value')?.textContent,
       resumeName: (document.getElementById('resume-upload').files[0] || {}).name
     };
     return out;
@@ -62,6 +66,7 @@ const FILES = ['src/lib/util.js', 'src/lib/rules.js', 'src/lib/fields.js']
     sponsor: byLabel('sponsorship').id,
     why: byLabel('why do you want').id,
     tos: byLabel('certify').id,
+    source: byLabel('how did you hear').id,
     resume: byLabel('upload your resume').id
   });
 
@@ -70,6 +75,7 @@ const FILES = ['src/lib/util.js', 'src/lib/rules.js', 'src/lib/fields.js']
   assert.strictEqual(result.dom.sponsor, 'no', 'radio resolved "No"');
   assert.strictEqual(result.dom.whyLen, 300, 'textarea respected maxlength');
   assert.strictEqual(result.dom.tos, true);
+  assert.strictEqual(result.dom.source, 'Handshake', 'custom combobox selected a real option');
   assert.strictEqual(result.dom.resumeName, 'Alex_Rivera_Resume.pdf');
   assert.strictEqual(result.file.ok, true);
 

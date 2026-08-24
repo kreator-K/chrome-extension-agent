@@ -151,7 +151,7 @@ async function generateAnswers({ questions, pageContext }) {
  * candidate where each one could honestly fit (or that it doesn't, rather
  * than inventing experience to close the gap).
  */
-async function analyzeMatch({ jobDescription, jobTitle, company }) {
+async function analyzeMatch({ jobDescription, jobTitle, company, applicationFacts }) {
   if (!jobDescription || jobDescription.trim().length < 40) {
     throw new Error('No job description could be read from this page. Paste it in the panel to score against it.');
   }
@@ -159,9 +159,11 @@ async function analyzeMatch({ jobDescription, jobTitle, company }) {
   const settings = await RA.storage.getSettings();
   const profile = await RA.storage.getProfile();
   const resume = await RA.storage.getResume();
-  if (!resume.text) throw new Error('No resume knowledge base uploaded yet.');
+  const applicationResume = await RA.storage.getApplicationResume();
+  const scoredResume = applicationResume.text || resume.text;
+  if (!scoredResume) throw new Error('No readable application resume or resume knowledge base uploaded yet.');
 
-  const local = RA.matchScore(jobDescription, resume.text, profile);
+  const local = RA.matchScore(jobDescription, scoredResume, profile, jobTitle);
   if (!settings.apiKey || !local.missing.length) {
     return { local, ai: null };
   }
@@ -184,9 +186,13 @@ async function analyzeMatch({ jobDescription, jobTitle, company }) {
       '- If the resume already shows equivalent experience under different words (e.g. resume says "Postgres", JD wants "SQL databases"), set inResume: true and say exactly how to reword the existing bullet to include the JD\'s term.',
       '- If the resume does not support it at all, set inResume: false and say so plainly — never invent a project, tool, or skill the candidate has not demonstrated. Do not suggest adding a keyword the resume cannot back up.',
       '- Never suggest keyword stuffing (dumping unrelated terms into a skills list just to match). Every suggestion must point to a specific, truthful place it belongs.',
+      '- Candidate-entered application facts are current inputs and must be considered. If one conflicts with the application resume or profile, state the conflict plainly and ask the candidate to review it; never silently choose a side or claim the sources agree.',
       '',
       '=== CANDIDATE PROFILE ===',
       RA.profileSummary(profile),
+      '',
+      '=== CANDIDATE-ENTERED APPLICATION FACTS ===',
+      applicationFacts || 'None supplied.',
       '',
       '=== RESUME (relevant excerpt) ===',
       resumeExcerpt

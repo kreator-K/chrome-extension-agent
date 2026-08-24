@@ -53,6 +53,28 @@ assert.ok(weak.score < strong.score, 'unrelated resume should score lower than a
 assert.ok(weak.missing.length > 0, 'weak resume should surface missing keywords');
 assert.ok(weak.missing.some((m) => /kubernetes|python|aws/i.test(m)));
 
+const APPIAN_JOB = `Product Manager (2027 Graduates)
+What You'll Do
+Own the Backlog: Act as product owner, owning and prioritizing the product backlog.
+Champion User Experience through design sessions, mockups, UX reviews, and usability testing.
+Basic Qualifications
+Effective written and verbal communication skills. Proven fluency in AI and LLMs.
+Preferred Qualifications
+Familiarity with Agile/Scrum methodologies and running sprint ceremonies.
+Thank you for your interest in joining our team.
+The base salary range is $110,000 - $113,000.
+Benefits include disability insurance and tuition reimbursement.
+Appian provides reasonable accommodations.`;
+const appianKeywords = RA.extractKeywords(APPIAN_JOB, 40).map((item) => item.phrase.toLowerCase());
+assert.ok(appianKeywords.includes('product owner'));
+assert.ok(appianKeywords.includes('product backlog'));
+assert.ok(appianKeywords.includes('usability testing'));
+assert.ok(appianKeywords.includes('agile'));
+assert.ok(!appianKeywords.some((item) => /salary|disability|tuition|accommodation|appian provides|please note/.test(item)), 'drops compensation, benefits, legal and company boilerplate');
+const appianMatch = RA.matchScore(APPIAN_JOB, 'Product owner for an AI platform using Agile and usability testing.', { totalYearsExperience: '7', currentTitle: 'Product Manager' }, 'Product Manager (2027 Graduates)');
+assert.strictEqual(appianMatch.breakdown.yearsRequired, null, 'does not treat company age or salary numbers as experience requirements');
+assert.ok(appianMatch.breakdown.titleMatch > 70, 'uses the explicit job title for title similarity');
+
 // Deterministic and offline: no network, no chrome.runtime dependency.
 assert.strictEqual(typeof RA.matchScore, 'function');
 

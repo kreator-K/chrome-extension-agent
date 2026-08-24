@@ -37,9 +37,53 @@
       <label for="cover-letter-upload">Optional cover letter</label>
       <input type="file" id="cover-letter-upload" name="cover_letter" accept=".pdf,.doc,.docx" />
 
+      <label id="source-label" for="source-combo">How did you hear about us?</label>
+      <div class="select__value-container">
+        <div class="select__placeholder">Select...</div>
+        <input id="source-combo" role="combobox" aria-labelledby="source-label" aria-expanded="false" type="text" />
+      </div>
+
+      <label id="major-label" for="major-combo">Are you pursuing a Computer Science major?</label>
+      <div class="select__value-container select__value-container--has-value">
+        <div class="select__single-value">Yes</div>
+        <input id="major-combo" role="combobox" aria-labelledby="major-label" aria-expanded="false" type="text" style="opacity:0" />
+      </div>
+
       <input type="hidden" name="csrf" value="x" />
       <input type="search" name="search" placeholder="Search jobs" />
       <button type="submit">Submit</button>
     </form>
+    <script>
+      const source = document.getElementById('source-combo');
+      source.addEventListener('input', () => {
+        let list = document.getElementById('source-options');
+        if (list) list.remove();
+        list = document.createElement('div');
+        list.id = 'source-options';
+        list.setAttribute('role', 'listbox');
+        ['Handshake', 'LinkedIn', 'Employee referral'].forEach((label) => {
+          const option = document.createElement('div');
+          option.setAttribute('role', 'option');
+          option.textContent = label;
+          option.addEventListener('click', () => {
+            const container = source.closest('.select__value-container');
+            container.querySelector('.select__placeholder')?.remove();
+            let selected = container.querySelector('.select__single-value');
+            if (!selected) {
+              selected = document.createElement('div');
+              selected.className = 'select__single-value';
+              container.prepend(selected);
+            }
+            selected.textContent = label;
+            source.value = '';
+            list.remove();
+          });
+          list.appendChild(option);
+        });
+        document.body.appendChild(list);
+        source.setAttribute('aria-controls', list.id);
+        source.setAttribute('aria-expanded', 'true');
+      });
+    </script>
   </body>
 </html>

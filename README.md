@@ -144,6 +144,7 @@ npm run test:dom      # scan + fill against a fixture form in real Chromium
 npm run test:panel    # match-score panel rendering against a fixture JD page
 npm run test:workflow # fresh profile: upload, extract, scan, fill and attach
 npm run test:load     # loads the unpacked extension and pokes the service worker
+RESUME_TEXT_PATH=/path/to/resume.txt npm run test:appian-live # read-only scan of the live Appian Greenhouse job
 ```
 
 The DOM, panel and load tests use Playwright's Chromium. Playwright is a local

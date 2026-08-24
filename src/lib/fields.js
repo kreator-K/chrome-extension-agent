@@ -12,7 +12,8 @@
     if (el.disabled || el.readOnly) return false;
     if (el.type === 'hidden') return false;
     const style = getComputedStyle(el);
-    if (style.visibility === 'hidden' || style.display === 'none' || style.opacity === '0') return false;
+    if (style.visibility === 'hidden' || style.display === 'none') return false;
+    if (style.opacity === '0' && el.getAttribute('role') !== 'combobox') return false;
     const r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0;
   }
@@ -93,6 +94,14 @@
     return Array.from(el.options)
       .filter((o) => o.value !== '' || /select|choose/i.test(o.text) === false)
       .map((o) => ({ label: textOf(o) || o.value, value: o.value }));
+  }
+
+  function customComboboxValue(el) {
+    const scope = el.closest('.select__value-container, [class*="value-container"], [class*="ValueContainer"]') ||
+      (el.parentElement && el.parentElement.parentElement);
+    if (!scope) return '';
+    const selected = scope.querySelector('.select__single-value, [class*="singleValue"], [class*="SingleValue"]');
+    return textOf(selected);
   }
 
   function radioGroups(rootEl) {
@@ -182,6 +191,7 @@
       let kind = 'text';
       let options = null;
       if (tag === 'select') { kind = 'select'; options = optionsOfSelect(el); }
+      else if (el.getAttribute('role') === 'combobox') kind = 'combobox';
       else if (tag === 'textarea') kind = 'textarea';
       else if (type === 'checkbox') { kind = 'checkbox'; options = [{ label: 'Yes', value: 'yes' }, { label: 'No', value: 'no' }]; }
       else if (type === 'file') kind = 'file';
@@ -198,7 +208,7 @@
           ? (el.checked ? 'Yes' : '')
           : kind === 'file'
             ? ((el.files && el.files[0] && el.files[0].name) || '')
-            : (el.value || ''),
+            : (el.value || (kind === 'combobox' ? customComboboxValue(el) : '')),
         maxLength: el.maxLength && el.maxLength > 0 ? el.maxLength : null,
         required: !!el.required,
         placeholder: el.getAttribute('placeholder') || ''
@@ -229,7 +239,7 @@
    * Write an answer into a previously scanned field.
    * @returns {{ok:boolean, applied?:string, reason?:string}}
    */
-  RA.fillField = function (fieldId, value) {
+  RA.fillField = async function (fieldId, value) {
     const entry = registry.get(fieldId);
     if (!entry) return { ok: false, reason: 'field no longer on page' };
 
@@ -282,6 +292,32 @@
       fire(el, ['input', 'change']);
       fire(el, ['blur']);
       return { ok: true, applied: pick.label };
+    }
+
+    if (entry.kind === 'combobox') {
+      const original = customComboboxValue(el) || el.value || '';
+      el.focus();
+      el.click();
+      setNativeValue(el, String(value));
+      fire(el, ['input', 'change']);
+      await new Promise((resolve) => setTimeout(resolve, 120));
+
+      const controls = (el.getAttribute('aria-controls') || el.getAttribute('aria-owns') || '').trim();
+      const controlled = controls ? el.ownerDocument.getElementById(controls) : null;
+      const optionNodes = Array.from((controlled || el.ownerDocument).querySelectorAll('[role="option"], .select__option'))
+        .filter((option) => visible(option));
+      const options = optionNodes.map((option) => ({ label: textOf(option), value: textOf(option), option }));
+      const pick = RA.bestOption(options, value);
+      if (!pick) {
+        setNativeValue(el, '');
+        fire(el, ['input', 'change', 'blur']);
+        return { ok: false, reason: `no matching option for "${String(value).slice(0, 80)}"` };
+      }
+      pick.option.click();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const applied = customComboboxValue(el) || pick.label;
+      if (!applied && original) return { ok: false, reason: 'selection did not stick' };
+      return { ok: true, applied };
     }
 
     if (entry.kind === 'checkbox') {

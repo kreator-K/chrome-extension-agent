@@ -77,6 +77,13 @@
     const unresolved = [];
 
     for (const f of fields) {
+      if (f.value && String(f.value).trim()) {
+        resolved.set(f.id, {
+          id: f.id, value: String(f.value), confidence: 1,
+          source: 'existing', basis: 'already filled on this application'
+        });
+        continue;
+      }
       if (f.kind === 'file') {
         resolved.set(f.id, applicationResume.fileName
           ? {
@@ -137,15 +144,16 @@
   :host { all: initial; }
   .wrap { font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     color: #16181d; background: #fff; width: 380px; max-height: 78vh; display: flex; flex-direction: column;
-    border: 1px solid #d6d9de; border-radius: 10px; box-shadow: 0 12px 40px rgba(0,0,0,.22); overflow: hidden; }
-  header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #f6f7f9; border-bottom: 1px solid #e3e6ea; }
+    border: 1px solid #d6d9de; border-radius: 10px; box-shadow: 0 12px 40px rgba(0,0,0,.22); overflow-y: auto; }
+  header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #f6f7f9; border-bottom: 1px solid #e3e6ea;
+    position: sticky; top: 0; z-index: 2; flex: none; }
   header h1 { font-size: 13px; margin: 0; font-weight: 600; flex: 1; }
   button { font: inherit; border-radius: 6px; border: 1px solid #c8ccd2; background: #fff; padding: 5px 9px; cursor: pointer; }
   button:hover { background: #f1f3f5; }
   button.primary { background: #1a63d8; border-color: #1a63d8; color: #fff; }
   button.primary:hover { background: #1552b6; }
   button:disabled { opacity: .55; cursor: default; }
-  .body { overflow-y: auto; padding: 8px 10px 12px; }
+  .body { overflow: visible; padding: 8px 10px 12px; flex: none; }
   .item { border: 1px solid #e3e6ea; border-radius: 8px; padding: 8px; margin-bottom: 8px; }
   .q { font-weight: 600; margin-bottom: 5px; }
   .meta { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; flex-wrap: wrap; }
@@ -159,6 +167,8 @@
   .row { display: flex; gap: 6px; margin-top: 6px; align-items: center; }
   .basis { font-size: 11px; color: #6b7079; margin-top: 4px; }
   .status { padding: 8px 12px; font-size: 12px; color: #4a4f57; border-top: 1px solid #e3e6ea; background: #fafbfc; }
+  .actions { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid #e3e6ea;
+    background: #fff; position: sticky; bottom: 0; z-index: 2; flex: none; }
   .err { color: #b3261e; }
   .empty { padding: 16px; color: #6b7079; text-align: center; }
   .match { padding: 10px 12px; border-bottom: 1px solid #e3e6ea; background: #fbfbfc; }
@@ -200,7 +210,7 @@
       <div class="match"></div>
       <div class="body"></div>
       <div class="status"></div>
-      <div style="display:flex;gap:6px;padding:8px 10px;border-top:1px solid #e3e6ea">
+      <div class="actions">
         <button class="primary" data-act="ai">Answer remaining with AI</button>
         <button data-act="fillall">Fill all</button>
       </div>`;
@@ -224,6 +234,7 @@
   function badgeFor(a) {
     if (!a || !a.value) return { cls: 'none', text: 'no answer' };
     if (a.source === 'saved') return { cls: 'saved', text: 'saved answer' };
+    if (a.source === 'existing') return { cls: 'profile', text: 'already filled' };
     if (a.source === 'profile') return { cls: 'profile', text: 'profile' };
     if (a.source === 'resume') return { cls: 'resume', text: 'application resume' };
     if (a.source === 'ai') return { cls: 'ai', text: `AI · ${Math.round((a.confidence || 0) * 100)}%` };
@@ -272,7 +283,7 @@
     return itemEl.querySelector('textarea').value;
   }
 
-  function fillItem(itemEl) {
+  async function fillItem(itemEl) {
     const field = state.fields.find((f) => f.id === itemEl.dataset.id);
     const answer = state.answers.get(itemEl.dataset.id);
     const value = field && field.kind === 'file' ? (answer && answer.file) : answerOf(itemEl);
@@ -325,8 +336,8 @@
           </div>
         </div>
       </div>
-      ${matched.length ? `<div class="kw-title">Matched keywords</div><div class="kw-list">${kwChips(matched.slice(0, 12), 'supported')}</div>` : ''}
-      ${missing.length ? `<div class="kw-title">Recommended keywords to add ${missingRequired && missingRequired.length ? '(red = called out as required)' : ''}</div><div class="kw-list">${kwChips(missing.slice(0, 15), 'gap')}</div>` : '<div class="kw-title">No significant keyword gaps found</div>'}
+      ${matched.length ? `<div class="kw-title">Matched job requirements</div><div class="kw-list">${kwChips(matched.slice(0, 12), 'supported')}</div>` : ''}
+      ${missing.length ? `<div class="kw-title">Relevant requirements not explicit in the resume ${missingRequired && missingRequired.length ? '(red = required)' : ''}</div><div class="kw-list">${kwChips(missing.slice(0, 15), 'gap')}</div>` : '<div class="kw-title">No significant requirement gaps found</div>'}
       ${aiBlock}
       <div class="row">
         ${missing.length ? '<button data-act="matchai">Explain gaps with AI</button>' : ''}
@@ -362,14 +373,18 @@
     }
     if (act === 'matchai') { await runMatchAi(); return; }
     if (act === 'fillall') {
-      let filled = 0; let failed = 0;
-      state.shadow.querySelectorAll('.item').forEach((el) => {
+      let filled = 0; let failed = 0; let preserved = 0;
+      for (const el of state.shadow.querySelectorAll('.item')) {
+        const field = state.fields.find((f) => f.id === el.dataset.id);
+        if (field && field.value && String(field.value).trim()) { preserved++; continue; }
         const value = answerOf(el);
-        if (!value.trim()) return;
-        const r = fillItem(el);
+        if (!value.trim()) continue;
+        const r = await fillItem(el);
         if (r.ok) filled++; else failed++;
-      });
-      setStatus(`Filled ${filled} field${filled === 1 ? '' : 's'}` + (failed ? `, ${failed} could not be set` : '') + '. Review before submitting.');
+      }
+      setStatus(`Filled ${filled} blank field${filled === 1 ? '' : 's'}` +
+        (preserved ? ` · preserved ${preserved} existing answer${preserved === 1 ? '' : 's'}` : '') +
+        (failed ? ` · ${failed} could not be set` : '') + '. Review before submitting.');
       return;
     }
     if (!item) return;
@@ -377,7 +392,7 @@
     const field = state.fields.find((f) => f.id === fieldId);
 
     if (act === 'fill') {
-      const r = fillItem(item);
+      const r = await fillItem(item);
       setStatus(r.ok ? `Filled: ${RA.truncate(r.applied, 80)}` : `Could not fill: ${r.reason}`, !r.ok);
     } else if (act === 'show') {
       RA.highlightField(fieldId, true);
@@ -393,12 +408,15 @@
   /* ------------------------------------------------------------- workflow */
 
   async function computeMatch() {
-    const [profile, resume] = await Promise.all([RA.storage.getProfile(), RA.storage.getResume()]);
+    const [profile, resume, applicationResume] = await Promise.all([
+      RA.storage.getProfile(), RA.storage.getResume(), RA.storage.getApplicationResume()
+    ]);
     const jd = state.jdOverride || pageContext().jobDescription;
-    if (!resume.text || !jd || jd.trim().length < 40) {
+    const scoredResume = applicationResume.text || resume.text;
+    if (!scoredResume || !jd || jd.trim().length < 40) {
       state.match = null;
     } else {
-      state.match = RA.matchScore(jd, resume.text, profile);
+      state.match = RA.matchScore(jd, scoredResume, profile, pageContext().jobTitle);
       state.matchAi = null;
     }
     renderMatch();
@@ -410,10 +428,14 @@
     const btn = state.shadow.querySelector('[data-act="matchai"]');
     if (btn) { btn.disabled = true; btn.textContent = 'Asking Claude…'; }
     const ctx = pageContext();
+    const applicationFacts = state.fields
+      .filter((f) => f.value && /major|degree|education|school|graduat|gpa|internship|leadership|university organization/i.test(f.label))
+      .map((f) => `${f.label}: ${f.value}`)
+      .join('\n');
     chrome.runtime.sendMessage(
       {
         type: 'ANALYZE_MATCH',
-        payload: { jobDescription: state.jdOverride || ctx.jobDescription, jobTitle: ctx.jobTitle, company: ctx.company }
+        payload: { jobDescription: state.jdOverride || ctx.jobDescription, jobTitle: ctx.jobTitle, company: ctx.company, applicationFacts }
       },
       (res) => {
         state.matchBusy = false;

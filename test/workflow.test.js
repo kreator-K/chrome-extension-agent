@@ -176,6 +176,7 @@ Total years of experience: 8 years`;
     await application.evaluate(() => {
       document.getElementById('ra-host').shadowRoot.querySelector('[data-act="fillall"]').click();
     });
+    await application.waitForFunction(() => document.getElementById('fn').value === 'Alex');
 
     const applied = await application.evaluate(() => ({
       firstName: document.getElementById('fn').value,

@@ -54,6 +54,16 @@ assert.ok(rust.confidence < 0.8, 'fallback should be low confidence');
 
 // Open-ended questions are left for the model.
 assert.strictEqual(RA.answerFromRules({ label: 'Why do you want to work here?', kind: 'textarea' }, profile), null);
+assert.strictEqual(
+  RA.answerFromRules({ label: 'Have you held leadership roles through university organizations?', kind: 'combobox' }, profile),
+  null,
+  'does not answer a university-organization yes/no question with the school name'
+);
+assert.strictEqual(
+  RA.answerFromRules({ label: 'Are you currently pursuing a Major in Computer Science or Computer Engineering?', kind: 'combobox' }, profile),
+  null,
+  'does not answer a yes/no qualification question with free-text major'
+);
 
 // Sensitive questions are never sent to the model.
 assert.ok(RA.isSensitive('Please self-identify your race/ethnicity'));

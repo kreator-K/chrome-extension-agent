@@ -74,6 +74,21 @@ const CONTENT = path.join(__dirname, '..', 'src', 'content', 'content.js');
   console.log('Missing keywords shown:', chips.join(', '));
   assert.ok(chips.some((c) => /terraform|kafka/i.test(c)), 'expected Terraform/Kafka to show as a gap');
 
+  const scroll = await page.evaluate(() => {
+    const root = document.getElementById('ra-host').shadowRoot;
+    root.querySelector('.match').insertAdjacentHTML('beforeend', '<div style="height:1400px">long analysis</div>');
+    const wrap = root.querySelector('.wrap');
+    return {
+      overflowY: getComputedStyle(wrap).overflowY,
+      clientHeight: wrap.clientHeight,
+      scrollHeight: wrap.scrollHeight,
+      actionsPosition: getComputedStyle(root.querySelector('.actions')).position
+    };
+  });
+  assert.strictEqual(scroll.overflowY, 'auto', 'the whole panel owns the scrollbar');
+  assert.ok(scroll.scrollHeight > scroll.clientHeight, 'long match analysis remains scrollable to the questions and Fill all button');
+  assert.strictEqual(scroll.actionsPosition, 'sticky', 'Fill all remains available at the bottom while scrolling');
+
   await browser.close();
   console.log('\nPanel match-score rendering passed');
 })().catch((err) => { console.error(err); process.exit(1); });
