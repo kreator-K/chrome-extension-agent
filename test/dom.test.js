@@ -29,6 +29,8 @@ const FILES = ['src/lib/util.js', 'src/lib/rules.js', 'src/lib/fields.js']
   assert.strictEqual(byLabel('why do you want').maxLength, 300);
   assert.ok(byLabel('years of experience'), 'finds the years-of-experience input');
   assert.ok(byLabel('certify'), 'finds the checkbox');
+  assert.strictEqual(byLabel('upload your resume').kind, 'file', 'finds the resume upload');
+  assert.ok(!byLabel('optional cover letter'), 'does not claim unrelated file uploads');
   assert.ok(!fields.some((f) => /search/i.test(f.label)), 'skips the search box');
   assert.ok(!fields.some((f) => /csrf/i.test(f.label)), 'skips hidden inputs');
 
@@ -40,12 +42,18 @@ const FILES = ['src/lib/util.js', 'src/lib/rules.js', 'src/lib/fields.js']
     out.radio = R.fillField(ids.sponsor, 'No');
     out.textarea = R.fillField(ids.why, 'x'.repeat(400));
     out.checkbox = R.fillField(ids.tos, 'Yes');
+    out.file = R.fillField(ids.resume, {
+      fileName: 'Alex_Rivera_Resume.pdf',
+      mimeType: 'application/pdf',
+      dataUrl: 'data:application/pdf;base64,JVBERi0xLjQK'
+    });
     out.dom = {
       fn: document.getElementById('fn').value,
       auth: document.getElementById('auth').value,
       sponsor: (document.querySelector('input[name=sponsor]:checked') || {}).value,
       whyLen: document.getElementById('why').value.length,
-      tos: document.getElementById('tos').checked
+      tos: document.getElementById('tos').checked,
+      resumeName: (document.getElementById('resume-upload').files[0] || {}).name
     };
     return out;
   }, {
@@ -53,7 +61,8 @@ const FILES = ['src/lib/util.js', 'src/lib/rules.js', 'src/lib/fields.js']
     auth: byLabel('legally authorized').id,
     sponsor: byLabel('sponsorship').id,
     why: byLabel('why do you want').id,
-    tos: byLabel('certify').id
+    tos: byLabel('certify').id,
+    resume: byLabel('upload your resume').id
   });
 
   assert.strictEqual(result.dom.fn, 'Prashant');
@@ -61,6 +70,8 @@ const FILES = ['src/lib/util.js', 'src/lib/rules.js', 'src/lib/fields.js']
   assert.strictEqual(result.dom.sponsor, 'no', 'radio resolved "No"');
   assert.strictEqual(result.dom.whyLen, 300, 'textarea respected maxlength');
   assert.strictEqual(result.dom.tos, true);
+  assert.strictEqual(result.dom.resumeName, 'Alex_Rivera_Resume.pdf');
+  assert.strictEqual(result.file.ok, true);
 
   await browser.close();
   console.log('\nAll DOM assertions passed');

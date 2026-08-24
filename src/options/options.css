@@ -32,6 +32,8 @@ input, select, textarea {
 }
 textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; resize: vertical; }
 .row { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+.row input[type="file"] { width: auto; max-width: 100%; }
+.file-meta { margin-top: 8px; }
 .hint { font-size: 12px; color: #6b7079; }
 button {
   font: inherit;

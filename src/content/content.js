@@ -68,14 +68,28 @@
   /* ------------------------------------------------------ local answering */
 
   async function resolveLocally(fields) {
-    const [profile, bank] = await Promise.all([
+    const [profile, bank, applicationResume] = await Promise.all([
       RA.storage.getProfile(),
-      RA.storage.getAnswerBank()
+      RA.storage.getAnswerBank(),
+      RA.storage.getApplicationResume()
     ]);
     const resolved = new Map();
     const unresolved = [];
 
     for (const f of fields) {
+      if (f.kind === 'file') {
+        resolved.set(f.id, applicationResume.fileName
+          ? {
+              id: f.id, value: applicationResume.fileName, confidence: 1,
+              source: 'resume', basis: 'application resume saved in Options',
+              file: applicationResume
+            }
+          : {
+              id: f.id, value: '', confidence: 0, source: 'skipped',
+              basis: 'no application resume saved — add one in Options'
+            });
+        continue;
+      }
       const hit = RA.matchAnswerBank(bank, f.label);
       if (hit) {
         resolved.set(f.id, {
@@ -137,7 +151,7 @@
   .meta { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; flex-wrap: wrap; }
   .badge { font-size: 11px; padding: 1px 6px; border-radius: 999px; border: 1px solid #c8ccd2; color: #4a4f57; }
   .badge.saved { border-color: #7a5cd0; color: #5a3fb0; }
-  .badge.profile { border-color: #2f9e63; color: #1f7a4a; }
+  .badge.profile, .badge.resume { border-color: #2f9e63; color: #1f7a4a; }
   .badge.ai { border-color: #1a63d8; color: #1a63d8; }
   .badge.skipped, .badge.none { border-color: #c9a227; color: #8a6d0b; }
   textarea { width: 100%; box-sizing: border-box; min-height: 34px; resize: vertical; font: inherit;
@@ -211,6 +225,7 @@
     if (!a || !a.value) return { cls: 'none', text: 'no answer' };
     if (a.source === 'saved') return { cls: 'saved', text: 'saved answer' };
     if (a.source === 'profile') return { cls: 'profile', text: 'profile' };
+    if (a.source === 'resume') return { cls: 'resume', text: 'application resume' };
     if (a.source === 'ai') return { cls: 'ai', text: `AI · ${Math.round((a.confidence || 0) * 100)}%` };
     if (a.source === 'skipped') return { cls: 'skipped', text: 'left to you' };
     return { cls: 'none', text: a.source || '' };
@@ -233,16 +248,17 @@
       const optionHint = f.options && f.options.length
         ? `<div class="basis">options: ${f.options.map((o) => o.label).join(' · ').slice(0, 160)}</div>`
         : '';
+      const isFile = f.kind === 'file';
       item.innerHTML = `
         <div class="q"></div>
         <div class="meta"><span class="badge ${badge.cls}"></span></div>
-        <textarea rows="${f.kind === 'textarea' ? 4 : 1}"></textarea>
+        <textarea rows="${f.kind === 'textarea' ? 4 : 1}" ${isFile ? 'readonly' : ''}></textarea>
         ${optionHint}
         <div class="basis"></div>
         <div class="row">
-          <button data-act="fill">Fill</button>
+          <button data-act="fill">${isFile ? 'Attach resume' : 'Fill'}</button>
           <button data-act="show">Show field</button>
-          <button data-act="save">Save answer</button>
+          ${isFile ? '' : '<button data-act="save">Save answer</button>'}
         </div>`;
       item.querySelector('.q').textContent = f.label;
       item.querySelector('.badge').textContent = badge.text;
@@ -254,6 +270,13 @@
 
   function answerOf(itemEl) {
     return itemEl.querySelector('textarea').value;
+  }
+
+  function fillItem(itemEl) {
+    const field = state.fields.find((f) => f.id === itemEl.dataset.id);
+    const answer = state.answers.get(itemEl.dataset.id);
+    const value = field && field.kind === 'file' ? (answer && answer.file) : answerOf(itemEl);
+    return RA.fillField(itemEl.dataset.id, value);
   }
 
   function scoreClass(score) {
@@ -343,7 +366,7 @@
       state.shadow.querySelectorAll('.item').forEach((el) => {
         const value = answerOf(el);
         if (!value.trim()) return;
-        const r = RA.fillField(el.dataset.id, value);
+        const r = fillItem(el);
         if (r.ok) filled++; else failed++;
       });
       setStatus(`Filled ${filled} field${filled === 1 ? '' : 's'}` + (failed ? `, ${failed} could not be set` : '') + '. Review before submitting.');
@@ -354,7 +377,7 @@
     const field = state.fields.find((f) => f.id === fieldId);
 
     if (act === 'fill') {
-      const r = RA.fillField(fieldId, answerOf(item));
+      const r = fillItem(item);
       setStatus(r.ok ? `Filled: ${RA.truncate(r.applied, 80)}` : `Could not fill: ${r.reason}`, !r.ok);
     } else if (act === 'show') {
       RA.highlightField(fieldId, true);
@@ -420,6 +443,7 @@
     if (state.busy) return;
     if (!state.fields.length) await scan();
     const unresolved = state.fields.filter((f) => {
+      if (f.kind === 'file') return false;
       const a = state.answers.get(f.id);
       return !a || (!a.value && a.source !== 'skipped');
     });

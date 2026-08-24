@@ -19,7 +19,9 @@ the one above it has nothing:
 2. **Profile rules** — ~45 deterministic rules over a structured profile: name,
    contact, links, work authorization, sponsorship, years of experience per
    skill, notice period, salary expectation, relocation, education, EEO
-   defaults. No model call, no cost, no chance of invention.
+   defaults. The extension extracts unambiguous fields from the resume and
+   knowledge base locally, then leaves the profile visible for review. No model
+   call, no cost, no chance of invention.
 3. **Claude** — the open-ended ones ("Why this company?", "Describe a time
    you…", "What interests you about this role?"). The service worker sends the
    most relevant slices of your resume, your profile, and your previously
@@ -61,7 +63,11 @@ press **Score against this**.
    - **Knowledge base** — upload a `.txt`/`.md`/`.pdf` resume or paste text.
      Put more in than the one-pager: project detail, metrics, stories, phrasing
      you like. This is what the model draws on.
-   - **Profile** — the mechanical fields, plus your skills with years.
+   - **Application resume** — upload the actual `.pdf`, `.doc`, or `.docx` file
+     to attach to résumé/CV fields. This is separate from the knowledge base.
+   - **Profile** — review the mechanical fields extracted from the resume and
+     knowledge base. Existing edits are never overwritten; use **Fill from
+     resume & knowledge base** to rescan on demand.
    - **API key** — an [Anthropic API key](https://console.anthropic.com/).
      Press **Test key** to check it.
 
@@ -78,20 +84,24 @@ found, with the proposed answer and where it came from:
 |---|---|
 | `saved answer` | Reused from your answer bank |
 | `profile` | Derived from a profile field |
+| `application resume` | The locally saved résumé file is ready to attach |
 | `AI · 84%` | Written by Claude, with its confidence |
 | `left to you` | Sensitive question, deliberately unanswered |
 
-Per question you can **Fill** it, **Show field** (scrolls to and highlights it),
-or **Save answer** to add it to the bank for next time. **Fill all** writes
-every non-empty answer at once.
+Per question you can **Fill** it, **Attach resume**, **Show field** (scrolls to
+and highlights it), or **Save answer** to add it to the bank for next time.
+**Fill all** writes every non-empty answer and attaches the saved resume.
 
 Nothing is submitted for you. The extension fills fields; you read and click
 Submit.
 
 ## Privacy
 
-- Resume text, profile, answer bank and API key live in `chrome.storage.local`
-  in your browser profile. Nothing syncs anywhere.
+- Resume text, the original application-resume file, profile, answer bank and
+  API key live in `chrome.storage.local` in your browser profile. Nothing syncs
+  anywhere.
+- The original application-resume file is never sent to Anthropic. Only
+  relevant text from the knowledge base is included in an AI request.
 - The only network destination is `api.anthropic.com`, and only when you press
   **Answer remaining with AI** or **Explain gaps with AI**. Tiers 1 and 2 of
   answering, and the base resume match score, are fully offline.
@@ -113,6 +123,7 @@ src/lib/rules.js         deterministic profile-driven answers
 src/lib/fields.js        form scanning, label extraction, framework-safe filling
 src/lib/keywords.js      offline resume/JD match scoring and keyword extraction
 src/lib/prompts.js       grounded, question-aware AI prompt construction
+src/lib/profile_parser.js conservative offline profile extraction
 src/content/content.js   in-page orchestration and the review panel
 src/background/          Anthropic API calls; the only place the key is used
 src/options/             knowledge base, profile, settings, answer bank, PDF text, ATS checklist
@@ -146,6 +157,9 @@ second command above.
   wrapping `<label>` → `aria-label` → nearest ancestor text → placeholder →
   field name. Odd markup can still produce a poor label; edit the answer in the
   panel before filling.
+- Résumé/CV `<input type="file">` controls are supported. Custom drag-and-drop
+  upload widgets without a real file input remain manual; unrelated cover
+  letter and work-sample uploads are deliberately ignored.
 - The match score is a keyword-overlap heuristic, the same approach real ATS
   keyword-matchers use — not a guarantee of how any specific ATS will score
   you. Treat it as a checklist, not a verdict.

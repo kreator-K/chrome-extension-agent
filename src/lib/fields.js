@@ -5,6 +5,7 @@
 
   const TEXT_TYPES = ['text', 'email', 'tel', 'url', 'number', 'search', 'date', 'month', ''];
   const SKIP_NAME = /(^|[^a-z])(search|query|q|filter|coupon|promo|otp|captcha)([^a-z]|$)/i;
+  const RESUME_FILE_LABEL = /\b(resume|résumé|curriculum vitae|cv)\b/i;
 
   function visible(el) {
     if (!el || !el.isConnected) return false;
@@ -169,19 +170,21 @@
       if (claimed.has(el) || !visible(el)) return;
       const tag = el.tagName.toLowerCase();
       const type = (el.type || '').toLowerCase();
-      if (tag === 'input' && !TEXT_TYPES.includes(type) && type !== 'checkbox') return;
+      if (tag === 'input' && !TEXT_TYPES.includes(type) && type !== 'checkbox' && type !== 'file') return;
       if (SKIP_NAME.test(el.name || '') || SKIP_NAME.test(el.id || '')) return;
       if (el.closest('[role="search"], nav, header')) return;
 
       const id = 'f' + ++seq;
       const label = labelFor(el);
       if (!label) return;
+      if (type === 'file' && !RESUME_FILE_LABEL.test(label + ' ' + (el.name || '') + ' ' + (el.id || ''))) return;
 
       let kind = 'text';
       let options = null;
       if (tag === 'select') { kind = 'select'; options = optionsOfSelect(el); }
       else if (tag === 'textarea') kind = 'textarea';
       else if (type === 'checkbox') { kind = 'checkbox'; options = [{ label: 'Yes', value: 'yes' }, { label: 'No', value: 'no' }]; }
+      else if (type === 'file') kind = 'file';
       else if (type === 'number') kind = 'number';
       else if (type === 'date' || type === 'month') kind = 'date';
 
@@ -191,7 +194,11 @@
         kind,
         label,
         options,
-        value: kind === 'checkbox' ? (el.checked ? 'Yes' : '') : (el.value || ''),
+        value: kind === 'checkbox'
+          ? (el.checked ? 'Yes' : '')
+          : kind === 'file'
+            ? ((el.files && el.files[0] && el.files[0].name) || '')
+            : (el.value || ''),
         maxLength: el.maxLength && el.maxLength > 0 ? el.maxLength : null,
         required: !!el.required,
         placeholder: el.getAttribute('placeholder') || ''
@@ -238,6 +245,30 @@
 
     const el = entry.el;
     if (!el || !el.isConnected) return { ok: false, reason: 'field no longer on page' };
+
+    if (entry.kind === 'file') {
+      const stored = value && typeof value === 'object' ? value : null;
+      if (!stored || !stored.fileName || !stored.dataUrl) {
+        return { ok: false, reason: 'no application resume saved' };
+      }
+      try {
+        const comma = stored.dataUrl.indexOf(',');
+        if (comma < 0) return { ok: false, reason: 'saved resume data is invalid' };
+        const header = stored.dataUrl.slice(0, comma);
+        const encoded = stored.dataUrl.slice(comma + 1);
+        const binary = /;base64/i.test(header) ? atob(encoded) : decodeURIComponent(encoded);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const file = new File([bytes], stored.fileName, { type: stored.mimeType || 'application/octet-stream' });
+        const transfer = new DataTransfer();
+        transfer.items.add(file);
+        el.files = transfer.files;
+        fire(el, ['input', 'change']);
+        return { ok: true, applied: stored.fileName };
+      } catch (err) {
+        return { ok: false, reason: 'browser blocked the file attachment' };
+      }
+    }
 
     if (entry.kind === 'select') {
       const options = Array.from(el.options).map((o, idx) => ({

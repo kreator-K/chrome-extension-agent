@@ -66,8 +66,11 @@ chrome.runtime.sendMessage({ type: 'GET_STATE' }, (state) => {
   }
   const rows = [
     state.resume.chars
-      ? { ok: true, text: `Resume loaded (${state.resume.chars.toLocaleString()} chars)` }
-      : { ok: false, text: 'No resume uploaded yet' },
+      ? { ok: true, text: `Knowledge base loaded (${state.resume.chars.toLocaleString()} chars)` }
+      : { ok: false, text: 'No knowledge base saved yet' },
+    state.applicationResume && state.applicationResume.fileName
+      ? { ok: true, text: `Application resume: ${state.applicationResume.fileName}` }
+      : { ok: false, text: 'No application resume saved' },
     state.hasKey
       ? { ok: true, text: `API key set · ${state.settings.model}` }
       : { ok: false, text: 'No Anthropic API key set' },

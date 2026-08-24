@@ -17,7 +17,7 @@
       <section>
         <h2>1. Resume knowledge base</h2>
         <div class="row">
-          <input type="file" id="resumeFile" accept=".txt,.md,.json,.pdf" />
+          <input type="file" id="kbFile" accept=".txt,.md,.json,.pdf" />
           <span id="resumeMeta" class="hint"></span>
         </div>
         <p class="hint">
@@ -33,7 +33,22 @@
       </section>
 
       <section>
-        <h2>2. Profile</h2>
+        <h2>2. Application resume</h2>
+        <p class="hint">
+          This is the actual file attached to résumé/CV upload fields on applications.
+          It stays separate from the text knowledge base and is never sent to Anthropic.
+          PDF is recommended; DOC and DOCX are also supported. Maximum size: 5 MB.
+        </p>
+        <div class="row">
+          <input type="file" id="applicationResumeFile" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+          <button id="clearApplicationResume" class="danger" type="button">Remove</button>
+        </div>
+        <div id="applicationResumeMeta" class="file-meta hint">No application resume saved.</div>
+        <span id="applicationResumeStatus" class="hint"></span>
+      </section>
+
+      <section>
+        <h2>3. Profile</h2>
         <p class="hint">
           These answer the mechanical questions with no model call at all — free, instant
           and deterministic.
@@ -47,12 +62,13 @@
 
         <div class="row">
           <button id="saveProfile" class="primary">Save profile</button>
+          <button id="extractProfile" type="button">Fill from resume &amp; knowledge base</button>
           <span id="profileStatus" class="hint"></span>
         </div>
       </section>
 
       <section>
-        <h2>3. Anthropic API</h2>
+        <h2>4. Anthropic API</h2>
         <div class="grid">
           <label>API key
             <input type="password" id="apiKey" placeholder="sk-ant-…" autocomplete="off" />
@@ -87,7 +103,7 @@
       </section>
 
       <section>
-        <h2>4. ATS formatting checklist</h2>
+        <h2>5. ATS formatting checklist</h2>
         <p class="hint">
           The match score on the application panel checks keywords only. These are the
           formatting mistakes that get an otherwise-strong resume rejected before a
@@ -104,7 +120,7 @@
       </section>
 
       <section>
-        <h2>5. Answer bank</h2>
+        <h2>6. Answer bank</h2>
         <p class="hint">
           Answers you save from the on-page panel. They are reused verbatim when the same
           question shows up again, ahead of any model call.
@@ -121,6 +137,7 @@
     </div>
 
     <script src="../lib/util.js"></script>
+    <script src="../lib/profile_parser.js"></script>
     <script src="pdf.js"></script>
     <script src="options.js"></script>
   </body>

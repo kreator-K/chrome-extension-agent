@@ -32,7 +32,21 @@ const { chromium } = require('playwright');
   assert.ok(state && state.ok, 'service worker responds to GET_STATE');
   assert.strictEqual(state.hasKey, false);
   assert.strictEqual(state.settings.model, 'claude-opus-5');
+  assert.deepStrictEqual(state.applicationResume, { fileName: '', size: 0, updatedAt: 0 });
   console.log('GET_STATE:', JSON.stringify(state.resume), 'bank:', state.bankSize);
+
+  // The application resume is a separate original file, not the text knowledge base.
+  await page.setInputFiles('#applicationResumeFile', {
+    name: 'Alex_Rivera_Resume.docx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    buffer: Buffer.from('test-docx-bytes')
+  });
+  await page.waitForFunction(() => /Saved and ready/.test(document.getElementById('applicationResumeStatus').textContent));
+  const storedFile = await page.evaluate(() => new Promise((resolve) => {
+    chrome.storage.local.get('applicationResume', ({ applicationResume }) => resolve(applicationResume));
+  }));
+  assert.strictEqual(storedFile.fileName, 'Alex_Rivera_Resume.docx');
+  assert.match(storedFile.dataUrl, /^data:application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document;base64,/);
 
   // Generating answers without a key must fail loudly rather than silently.
   const err = await page.evaluate(() => new Promise((resolve) => {

@@ -69,6 +69,12 @@
       const { resume } = await RA.storage.get('resume');
       return resume || { text: '', fileName: '', updatedAt: 0 };
     },
+    async getApplicationResume() {
+      const { applicationResume } = await RA.storage.get('applicationResume');
+      return applicationResume || {
+        fileName: '', mimeType: '', size: 0, dataUrl: '', updatedAt: 0
+      };
+    },
     async getAnswerBank() {
       const { answerBank } = await RA.storage.get('answerBank');
       return Array.isArray(answerBank) ? answerBank : [];

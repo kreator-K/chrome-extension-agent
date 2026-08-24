@@ -249,10 +249,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           sendResponse(await testApiKey(msg.apiKey));
           break;
         case 'GET_STATE': {
-          const [settings, profile, resume, bank] = await Promise.all([
+          const [settings, profile, resume, applicationResume, bank] = await Promise.all([
             RA.storage.getSettings(),
             RA.storage.getProfile(),
             RA.storage.getResume(),
+            RA.storage.getApplicationResume(),
             RA.storage.getAnswerBank()
           ]);
           sendResponse({
@@ -261,6 +262,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             settings: Object.assign({}, settings, { apiKey: settings.apiKey ? 'set' : '' }),
             profile,
             resume: { fileName: resume.fileName, chars: (resume.text || '').length, updatedAt: resume.updatedAt },
+            applicationResume: {
+              fileName: applicationResume.fileName,
+              size: applicationResume.size,
+              updatedAt: applicationResume.updatedAt
+            },
             bankSize: bank.length
           });
           break;

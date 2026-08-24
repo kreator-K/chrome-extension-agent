@@ -31,6 +31,12 @@
 
       <label><input type="checkbox" id="tos" name="tos" /> I certify the information is accurate</label>
 
+      <label for="resume-upload">Upload your resume</label>
+      <input type="file" id="resume-upload" name="resume" accept=".pdf,.doc,.docx" />
+
+      <label for="cover-letter-upload">Optional cover letter</label>
+      <input type="file" id="cover-letter-upload" name="cover_letter" accept=".pdf,.doc,.docx" />
+
       <input type="hidden" name="csrf" value="x" />
       <input type="search" name="search" placeholder="Search jobs" />
       <button type="submit">Submit</button>
