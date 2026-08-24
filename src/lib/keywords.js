@@ -122,15 +122,11 @@
     // heavier-weighted longer candidate (e.g. "backend" inside
     // "senior backend engineer").
     const all = Array.from(merged.entries()).sort((a, b) => b[1].weight - a[1].weight);
-    const kept = [];
-    for (const [key, val] of all) {
-      const subsumed = kept.some(([, keptVal]) =>
-        keptVal.phrase.toLowerCase() !== val.phrase.toLowerCase() &&
-        (' ' + keptVal.phrase.toLowerCase() + ' ').includes(' ' + key + ' ') &&
-        keptVal.weight >= val.weight
-      );
-      if (!subsumed) kept.push([key, val]);
-    }
+    const kept = all.filter(([key, val]) => !all.some(([otherKey, otherVal]) =>
+      otherKey !== key &&
+      (' ' + otherKey + ' ').includes(' ' + key + ' ') &&
+      otherVal.weight >= val.weight * 0.5
+    ));
     return kept.slice(0, max || 40).map(([, v]) => v);
   };
 

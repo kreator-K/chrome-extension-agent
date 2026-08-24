@@ -71,6 +71,7 @@ assert.ok(appianKeywords.includes('product backlog'));
 assert.ok(appianKeywords.includes('usability testing'));
 assert.ok(appianKeywords.includes('agile'));
 assert.ok(!appianKeywords.some((item) => /salary|disability|tuition|accommodation|appian provides|please note/.test(item)), 'drops compensation, benefits, legal and company boilerplate');
+assert.ok(!(appianKeywords.includes('roadmap') && appianKeywords.includes('product roadmap')), 'keeps the more specific requirement instead of duplicate nested terms');
 const appianMatch = RA.matchScore(APPIAN_JOB, 'Product owner for an AI platform using Agile and usability testing.', { totalYearsExperience: '7', currentTitle: 'Product Manager' }, 'Product Manager (2027 Graduates)');
 assert.strictEqual(appianMatch.breakdown.yearsRequired, null, 'does not treat company age or salary numbers as experience requirements');
 assert.ok(appianMatch.breakdown.titleMatch > 70, 'uses the explicit job title for title similarity');
