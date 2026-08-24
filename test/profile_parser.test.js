@@ -100,4 +100,11 @@ assert.strictEqual(markdown.major, 'Business Administration');
 assert.strictEqual(markdown.gradYear, '2024');
 assert.ok(!/[#*|]/.test(markdown.school), 'does not leak Markdown formatting into profile fields');
 
+const cleanedStoredFormatting = ctx.RA.mergeExtractedProfile(
+  { firstName: 'Manual', school: '- **Cornell SC Johnson College of Business**' },
+  markdown
+);
+assert.strictEqual(cleanedStoredFormatting.profile.firstName, 'Manual', 'still preserves genuine manual values');
+assert.strictEqual(cleanedStoredFormatting.profile.school, 'Cornell SC Johnson College of Business', 'replaces stale Markdown-corrupted values');
+
 console.log('Profile extraction and non-destructive merge assertions passed');

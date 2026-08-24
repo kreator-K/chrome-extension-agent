@@ -233,7 +233,9 @@
         merged.skills = Array.from(existing.values());
         continue;
       }
-      if (value !== '' && value != null && !String(merged[key] || '').trim()) {
+      const existingValue = String(merged[key] || '').trim();
+      const formattingPolluted = /^[-*+]\s+/.test(existingValue) || /\*\*|__|~~|`/.test(existingValue);
+      if (value !== '' && value != null && (!existingValue || formattingPolluted)) {
         merged[key] = value;
         changed.push(key);
       }
