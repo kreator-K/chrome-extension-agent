@@ -52,6 +52,26 @@ assert.strictEqual(merged.profile.firstName, 'Preferred', 'does not overwrite re
 assert.strictEqual(merged.profile.email, extracted.email);
 assert.strictEqual(merged.profile.skills.find((s) => s.name === 'Python').years, 7);
 
+const resumeSkillList = ctx.RA.extractProfile(`TECHNICAL PROFICIENCY
+Product: Discovery & user research, Product Management, A/B testing, PLG onboarding, Amplitude, Mixpanel, Figma
+Technical: Python, SQL, LLM applications (RAG, vector retrieval, agents, evals); multimodal pipelines; AI-assisted prototyping
+PROFESSIONAL EXPERIENCE`);
+const resumeSkillNames = resumeSkillList.skills.map((s) => s.name);
+for (const expected of ['User Research', 'Product Management', 'A/B Testing', 'PLG Onboarding', 'Amplitude', 'Mixpanel', 'Figma', 'Python', 'SQL', 'LLM Applications', 'RAG', 'Vector Retrieval', 'Multimodal AI', 'AI-assisted Prototyping']) {
+  assert.ok(resumeSkillNames.includes(expected), `imports ${expected} without requiring a year count`);
+}
+assert.ok(resumeSkillList.skills.every((s) => s.years === ''), 'does not infer unsupported skill durations');
+
+const explicitDuration = ctx.RA.extractProfile('Technical skills: Python, SQL\nPython — 6 years');
+assert.strictEqual(explicitDuration.skills.find((s) => s.name === 'Python').years, 6, 'explicit duration wins over a blank skill mention');
+assert.strictEqual(explicitDuration.skills.find((s) => s.name === 'SQL').years, '');
+
+const filledBlankDuration = ctx.RA.mergeExtractedProfile(
+  { skills: [{ name: 'Python', years: '' }] },
+  explicitDuration
+);
+assert.strictEqual(filledBlankDuration.profile.skills.find((s) => s.name === 'Python').years, 6, 'later explicit evidence fills a blank year');
+
 const pollutedDefaults = ctx.RA.mergeExtractedProfile(
   { firstName: '', lastName: '', email: '', degreeLevel: "Master's", workAuthorized: 'yes' },
   extracted

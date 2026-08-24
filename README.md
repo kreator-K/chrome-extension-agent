@@ -69,7 +69,9 @@ press **Score against this**.
      to attach to résumé/CV fields. This is separate from the knowledge base.
    - **Profile** — review the mechanical fields extracted from the resume and
      knowledge base. Existing edits are never overwritten; use **Fill from
-     resume & knowledge base** to rescan on demand.
+     resume & knowledge base** to rescan on demand. Recognized skill names are
+     merged from both documents; their year fields remain blank unless a source
+     explicitly states a duration.
    - **API key** — an [Anthropic API key](https://console.anthropic.com/).
      Press **Test key** to check it.
 

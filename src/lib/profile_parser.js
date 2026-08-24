@@ -89,6 +89,53 @@
     return cleanScalar(part || value);
   }
 
+  const SKILL_ALIASES = [
+    ['Product Management', ['product management']],
+    ['Product Strategy', ['product strategy']],
+    ['Product Discovery', ['product discovery', 'discovery & user research']],
+    ['User Research', ['user research']],
+    ['A/B Testing', ['a/b testing', 'a-b testing', 'ab testing']],
+    ['PLG Onboarding', ['plg onboarding', 'product-led growth onboarding']],
+    ['Amplitude', ['amplitude']],
+    ['Mixpanel', ['mixpanel']],
+    ['Figma', ['figma']],
+    ['Python', ['python']],
+    ['SQL', ['sql']],
+    ['JavaScript', ['javascript']],
+    ['TypeScript', ['typescript']],
+    ['RAG', ['rag', 'retrieval-augmented generation', 'retrieval augmented generation']],
+    ['Vector Retrieval', ['vector retrieval', 'vector search']],
+    ['LLM Applications', ['llm applications', 'large language model applications']],
+    ['LLM Evals', ['llm evals', 'model evals']],
+    ['Multimodal AI', ['multimodal pipelines', 'multimodal ai']],
+    ['AI-assisted Prototyping', ['ai-assisted prototyping', 'ai assisted prototyping']],
+    ['OpenCV', ['opencv']],
+    ['Whisper', ['whisper']],
+    ['Llama', ['llama']],
+    ['Kubernetes', ['kubernetes']],
+    ['Docker', ['docker']],
+    ['AWS', ['aws', 'amazon web services']],
+    ['Azure', ['azure']],
+    ['GCP', ['gcp', 'google cloud platform']],
+    ['Git', ['git']],
+    ['Agile', ['agile']],
+    ['Scrum', ['scrum']],
+    ['Roadmapping', ['roadmapping', 'product roadmap']],
+    ['Prioritization', ['prioritization', 'prioritisation']],
+    ['Stakeholder Management', ['stakeholder management']],
+    ['Usability Testing', ['usability testing']],
+    ['Google Ads', ['google ads']],
+    ['Meta Ads', ['meta ads']]
+  ];
+
+  function escapedRe(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function mentions(text, phrase) {
+    return new RegExp('(?:^|[^A-Za-z0-9+#])' + escapedRe(phrase) + '(?=$|[^A-Za-z0-9+#])', 'i').test(text);
+  }
+
   RA.extractProfile = function (text) {
     text = String(text || '');
     const rawLines = text.split(/\r?\n/).filter((line) => line.trim());
@@ -216,6 +263,14 @@
         if (!skillMap.has(key) || skillMap.get(key).years < yearsValue) skillMap.set(key, { name: skill, years: yearsValue });
       }
     }
+    // Resumes and knowledge bases usually list skills without claiming an exact
+    // duration. Import conservative, recognized names from both sources but do
+    // not manufacture years. An explicit duration above always wins.
+    for (const [name, aliases] of SKILL_ALIASES) {
+      if (!aliases.some((alias) => mentions(text, alias))) continue;
+      const key = name.toLowerCase();
+      if (!skillMap.has(key)) skillMap.set(key, { name, years: '' });
+    }
     if (skillMap.size) out.skills = Array.from(skillMap.values()).slice(0, 50);
     return out;
   };
@@ -228,7 +283,17 @@
         const existing = new Map((merged.skills || []).map((s) => [String(s.name).toLowerCase(), s]));
         for (const skill of value || []) {
           const k = String(skill.name).toLowerCase();
-          if (!existing.has(k)) { existing.set(k, skill); changed.push('skills'); }
+          if (!existing.has(k)) {
+            existing.set(k, skill);
+            changed.push('skills');
+          } else {
+            const prior = existing.get(k);
+            const priorYears = prior && prior.years;
+            if ((priorYears === '' || priorYears == null) && skill.years !== '' && skill.years != null) {
+              existing.set(k, Object.assign({}, prior, { years: skill.years }));
+              changed.push('skills');
+            }
+          }
         }
         merged.skills = Array.from(existing.values());
         continue;

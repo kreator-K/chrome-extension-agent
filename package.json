@@ -1,6 +1,6 @@
 {
   "name": "resume-autofill-extension",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "private": true,
   "description": "Chrome extension that answers job application questions from a resume knowledge base and scores the resume against the job description.",
   "scripts": {

@@ -44,7 +44,7 @@
     veteranStatus: 'I do not wish to answer',
     disabilityStatus: 'I do not wish to answer',
     hispanicLatino: 'Decline to self-identify',
-    skills: [] // [{ name: 'Python', years: 5 }]
+    skills: [] // [{ name: 'Python', years: 5 }]; years may be blank when unstated
   };
 
   RA.DEFAULT_SETTINGS = DEFAULT_SETTINGS;

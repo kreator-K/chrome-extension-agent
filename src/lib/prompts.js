@@ -26,7 +26,9 @@
     push('Earliest start date', p.earliestStartDate);
     push('Desired compensation', p.desiredSalary);
     if ((p.skills || []).length) {
-      push('Skills with years', p.skills.map((s) => `${s.name} (${s.years}y)`).join(', '));
+      push('Skills', p.skills.map((s) =>
+        s.years === '' || s.years == null ? s.name : `${s.name} (${s.years}y)`
+      ).join(', '));
     }
     return lines.join('\n');
   }

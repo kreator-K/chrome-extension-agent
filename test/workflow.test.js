@@ -65,6 +65,7 @@ function storedZip(name, content) {
 ## Work preferences
 Authorized to work in the United States without sponsorship.
 Python (6 years) · Kubernetes — 3 yrs
+Product analytics: Amplitude and Mixpanel
 
 ## Education
 - **Highest degree:** Master's
@@ -88,7 +89,10 @@ Location: Austin, TX 78701, USA
 LinkedIn: https://linkedin.com/in/alexrivera
 Current title: Senior Backend Engineer
 Current company: Acme Corp
-Total years of experience: 8 years`;
+Total years of experience: 8 years
+TECHNICAL PROFICIENCY
+Product: User research, Product Management, Figma
+Technical: Python, SQL, LLM applications (RAG, vector retrieval)`;
     const applicationResumeDocx = storedZip(
       'word/document.xml',
       '<?xml version="1.0" encoding="UTF-8"?>' +
@@ -111,6 +115,15 @@ Total years of experience: 8 years`;
     assert.strictEqual(await options.inputValue('#p_school'), 'Example University');
     assert.strictEqual(await options.inputValue('#p_currentTitle'), 'Senior Backend Engineer');
     assert.strictEqual(await options.inputValue('#p_currentCompany'), 'Acme Corp');
+    const importedSkills = await options.locator('#skills .skill').evaluateAll((rows) => rows.map((row) => ({
+      name: row.querySelector('[name=name]').value,
+      years: row.querySelector('[name=years]').value
+    })));
+    for (const expected of ['Amplitude', 'Mixpanel', 'Figma', 'SQL', 'RAG', 'Vector Retrieval']) {
+      assert.ok(importedSkills.some((skill) => skill.name === expected), `imports ${expected} across the two source documents`);
+    }
+    assert.strictEqual(importedSkills.find((skill) => skill.name === 'Python').years, '6');
+    assert.strictEqual(importedSkills.find((skill) => skill.name === 'SQL').years, '', 'unstated years remain blank in the UI');
 
     // Re-running extraction must still fill blanks left by a previous partial pass.
     await options.evaluate(() => new Promise((resolve) => {

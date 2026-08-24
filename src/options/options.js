@@ -287,10 +287,13 @@ $('saveProfile').addEventListener('click', async () => {
     profile[key] = el ? el.value.trim() : '';
   }
   profile.skills = Array.from($('skills').querySelectorAll('.skill'))
-    .map((row) => ({
-      name: row.querySelector('[name=name]').value.trim(),
-      years: Number(row.querySelector('[name=years]').value) || 0
-    }))
+    .map((row) => {
+      const years = row.querySelector('[name=years]').value.trim();
+      return {
+        name: row.querySelector('[name=name]').value.trim(),
+        years: years === '' ? '' : Number(years)
+      };
+    })
     .filter((s) => s.name);
   await RA.storage.set({ profile });
   status($('profileStatus'), 'Saved.', 'ok');

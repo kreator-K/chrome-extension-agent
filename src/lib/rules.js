@@ -6,19 +6,22 @@
 
   const yn = (v) => (String(v).toLowerCase() === 'yes' ? 'Yes' : 'No');
 
-  function yearsFor(profile, skill) {
+  function skillYears(profile, skill) {
     const want = N(skill);
-    if (!want) return null;
+    if (!want) return { matched: false, years: null };
     let best = null;
+    let matched = false;
     for (const s of profile.skills || []) {
       const name = N(s.name);
       if (!name) continue;
       if (name === want || name.includes(want) || want.includes(name)) {
+        matched = true;
+        if (s.years === '' || s.years == null) continue;
         const y = Number(s.years);
         if (!isNaN(y) && (best == null || y > best)) best = y;
       }
     }
-    return best;
+    return { matched, years: best };
   }
 
   /* Each rule: id, match (RegExp on the normalized label), answer(ctx). */
@@ -88,13 +91,15 @@
       answer: (p, field) => {
         const m = N(field.label).match(/experience (?:do you have )?(?:with|in|using|of)\s+(.+)/);
         const skill = m ? m[1].replace(/\?.*$/, '').trim() : '';
-        const y = yearsFor(p, skill);
-        if (y != null) return String(y);
+        const evidence = skillYears(p, skill);
+        if (evidence.years != null) return String(evidence.years);
+        if (evidence.matched) return '';
         return p.totalYearsExperience ? String(p.totalYearsExperience) : '';
       },
       confidence: (p, field) => {
         const m = N(field.label).match(/experience (?:do you have )?(?:with|in|using|of)\s+(.+)/);
-        return m && yearsFor(p, m[1]) != null ? 0.95 : 0.55;
+        const evidence = skillYears(p, m ? m[1] : '');
+        return evidence.years != null ? 0.95 : evidence.matched ? 0 : 0.55;
       }
     },
     {

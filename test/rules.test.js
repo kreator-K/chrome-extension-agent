@@ -52,6 +52,15 @@ const rust = RA.answerFromRules({ label: 'How many years of experience do you ha
 assert.strictEqual(rust.value, '8');
 assert.ok(rust.confidence < 0.8, 'fallback should be low confidence');
 
+const unstatedPythonYears = Object.assign({}, profile, {
+  skills: [{ name: 'Python', years: '' }]
+});
+assert.strictEqual(
+  RA.answerFromRules({ label: 'How many years of experience do you have with Python?', kind: 'number' }, unstatedPythonYears),
+  null,
+  'a recognized skill with no documented duration is left blank instead of using total experience'
+);
+
 // Open-ended questions are left for the model.
 assert.strictEqual(RA.answerFromRules({ label: 'Why do you want to work here?', kind: 'textarea' }, profile), null);
 assert.strictEqual(
