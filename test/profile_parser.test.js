@@ -7,7 +7,8 @@ const ctx = {};
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'lib', 'profile_parser.js'), 'utf8'), ctx);
 
-const text = `Alex Rivera
+const text = `PROFESSIONAL RESUME
+Alex Rivera
 Austin, TX 78701
 alex.rivera@example.com | +1 (512) 555-0199
 https://linkedin.com/in/alexrivera
@@ -16,7 +17,10 @@ https://github.com/alexrivera
 Backend engineer with 8+ years of professional experience.
 Authorized to work in the United States without sponsorship.
 Python (6 years) · Kubernetes — 3 yrs
-Master's in Computer Science`;
+Master's in Computer Science | Example University | 2018
+
+PROFESSIONAL EXPERIENCE
+Senior Backend Engineer | Acme Corp | 2022 - Present`;
 
 const extracted = ctx.RA.extractProfile(text);
 assert.strictEqual(extracted.firstName, 'Alex');
@@ -30,6 +34,11 @@ assert.strictEqual(extracted.linkedin, 'https://linkedin.com/in/alexrivera');
 assert.strictEqual(extracted.github, 'https://github.com/alexrivera');
 assert.strictEqual(extracted.totalYearsExperience, '8');
 assert.strictEqual(extracted.degreeLevel, "Master's");
+assert.strictEqual(extracted.major, 'Computer Science');
+assert.strictEqual(extracted.school, 'Example University');
+assert.strictEqual(extracted.gradYear, '2018');
+assert.strictEqual(extracted.currentTitle, 'Senior Backend Engineer');
+assert.strictEqual(extracted.currentCompany, 'Acme Corp');
 assert.strictEqual(extracted.workAuthorized, 'yes');
 assert.strictEqual(extracted.requiresSponsorship, 'no');
 assert.ok(extracted.skills.some((s) => s.name === 'Python' && s.years === 6));
@@ -42,5 +51,13 @@ const merged = ctx.RA.mergeExtractedProfile(
 assert.strictEqual(merged.profile.firstName, 'Preferred', 'does not overwrite reviewed values');
 assert.strictEqual(merged.profile.email, extracted.email);
 assert.strictEqual(merged.profile.skills.find((s) => s.name === 'Python').years, 7);
+
+const pollutedDefaults = ctx.RA.mergeExtractedProfile(
+  { firstName: '', lastName: '', email: '', degreeLevel: "Master's", workAuthorized: 'yes' },
+  extracted
+);
+assert.strictEqual(pollutedDefaults.profile.firstName, 'Alex', 'fills blanks even when prior state stored every key');
+assert.strictEqual(pollutedDefaults.profile.email, extracted.email);
+assert.strictEqual(pollutedDefaults.profile.degreeLevel, "Master's", 'preserves nonblank reviewed/default values');
 
 console.log('Profile extraction and non-destructive merge assertions passed');

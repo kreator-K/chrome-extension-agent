@@ -140,6 +140,7 @@ npm run test:logic    # rules, matching and retrieval, in Node
 npm run test:keywords # ATS/match scoring against fixture job descriptions, in Node
 npm run test:dom      # scan + fill against a fixture form in real Chromium
 npm run test:panel    # match-score panel rendering against a fixture JD page
+npm run test:workflow # fresh profile: upload, extract, scan, fill and attach
 npm run test:load     # loads the unpacked extension and pokes the service worker
 ```
 

@@ -27,22 +27,24 @@
     const topLines = lines.slice(0, 12);
     const out = {};
 
-    const name = plausibleName(topLines[0]);
+    const name = topLines.map(plausibleName).find(Boolean);
     if (name) {
       const words = name.split(/\s+/);
       out.firstName = words[0];
       out.lastName = words.slice(1).join(' ');
     }
 
-    const email = firstMatch(text, /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i);
+    const emailText = text.replace(/\s*@\s*/g, '@').replace(/\s*\.\s*(com|org|net|edu|io|co)\b/gi, '.$1');
+    const email = firstMatch(emailText, /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i);
     if (email) out.email = email;
 
     const phone = firstMatch(text, /(?:\+?\d{1,3}[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]\d{4}\b/);
     if (phone) out.phone = phone;
 
-    const urls = text.match(/(?:https?:\/\/|www\.)[^\s<>]+/gi) || [];
+    const urls = text.match(/(?:(?:https?:\/\/|www\.)[^\s<>]+|(?:linkedin\.com\/in|github\.com)\/[^\s<>]+)/gi) || [];
     for (const raw of urls) {
-      const url = cleanUrl(raw);
+      let url = cleanUrl(raw);
+      if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
       if (/linkedin\.com\/in\//i.test(url) && !out.linkedin) out.linkedin = url;
       else if (/github\.com\//i.test(url) && !out.github) out.github = url;
       else if (!out.portfolio && !/linkedin\.com|github\.com/i.test(url)) out.portfolio = url;
@@ -57,7 +59,7 @@
         out.state = stateZip[1].toUpperCase();
         if (stateZip[2]) out.postalCode = stateZip[2];
       }
-      if (parts[2]) out.country = parts[2];
+      out.country = parts[2] || (stateZip ? 'USA' : '');
     }
 
     const years = firstMatch(text, /\b(\d{1,2})\+?\s+years?(?:\s+of)?\s+(?:professional\s+)?experience\b/i, 1);
@@ -72,8 +74,46 @@
     for (const [re, label] of degreePatterns) {
       if (re.test(text)) { out.degreeLevel = label; break; }
     }
+    const degreeLine = lines.find((line) => /\b(?:Ph\.?D\.?|Doctor|M\.?S\.?|M\.?A\.?|MBA|Master|B\.?S\.?|B\.?A\.?|Bachelor|Associate)\b/i.test(line));
+    if (degreeLine) {
+      const major = firstMatch(degreeLine, /\b(?:in|of)\s+([A-Za-z][A-Za-z &/-]{2,60}?)(?=\s*[|,;·]|\s+(?:19|20)\d{2}\b|$)/i, 1);
+      if (major && !/philosophy$/i.test(major)) out.major = major;
+      const yearOnDegree = firstMatch(degreeLine, /\b(19\d{2}|20\d{2})\b/, 1);
+      if (yearOnDegree) out.gradYear = yearOnDegree;
+    }
+    const schoolLine = lines.find((line) => /\b(?:university|college|institute of technology|polytechnic|school of)\b/i.test(line) && line.length < 180);
+    if (schoolLine) {
+      const schoolPart = schoolLine
+        .split(/\s*[|;·]\s*/)
+        .find((part) => /\b(?:university|college|institute of technology|polytechnic|school of)\b/i.test(part));
+      out.school = String(schoolPart || schoolLine).replace(/\s*,?\s*(?:19|20)\d{2}.*$/, '').trim();
+    }
     const gradYear = firstMatch(text, /\b(?:graduated|graduation|class of)\s*:?[ \t]*(20\d{2}|19\d{2})\b/i, 1);
-    if (gradYear) out.gradYear = gradYear;
+    if (gradYear && !out.gradYear) out.gradYear = gradYear;
+
+    const titleWords = /\b(?:engineer|manager|director|developer|analyst|scientist|architect|consultant|designer|specialist|administrator|coordinator|researcher|product lead|team lead)\b/i;
+    const atRole = text.match(/^\s*([^\n|]{3,80}?)\s+at\s+([^\n|]{2,80})\s*$/im);
+    if (atRole && titleWords.test(atRole[1])) {
+      out.currentTitle = atRole[1].trim();
+      out.currentCompany = atRole[2].replace(/\s*[|,;·]\s*(?:19|20)\d{2}.*$/, '').trim();
+    } else {
+      const experienceIndex = lines.findIndex((line) => /^\s*(?:professional\s+)?experience\s*$/i.test(line));
+      const candidates = experienceIndex >= 0 ? lines.slice(experienceIndex + 1, experienceIndex + 8) : topLines;
+      for (let i = 0; i < candidates.length && !out.currentTitle; i++) {
+        const parts = candidates[i].split(/\s*[|;·]\s*/).map((part) => part.trim()).filter(Boolean);
+        const titlePart = parts.find((part) => titleWords.test(part));
+        if (!titlePart) continue;
+        out.currentTitle = titlePart.replace(/\s*[,-]?\s*(?:19|20)\d{2}.*$/, '').trim();
+        const companyPart = parts.find((part) => part !== titlePart && !/(?:19|20)\d{2}|present|current/i.test(part));
+        if (companyPart) out.currentCompany = companyPart;
+        else {
+          const adjacent = [candidates[i - 1], candidates[i + 1]].find((line) =>
+            line && line.length < 100 && !titleWords.test(line) && !/(?:19|20)\d{2}|present|current/i.test(line)
+          );
+          if (adjacent) out.currentCompany = adjacent;
+        }
+      }
+    }
 
     if (/\b(?:authorized|eligible) to work in (?:the )?(?:united states|u\.?s\.?)\b/i.test(text)) out.workAuthorized = 'yes';
     if (/\b(?:(?:do not|don't|does not) require (?:visa )?sponsorship|without (?:the need for )?(?:visa )?sponsorship)\b/i.test(text)) out.requiresSponsorship = 'no';
@@ -97,10 +137,9 @@
     return out;
   };
 
-  RA.mergeExtractedProfile = function (current, extracted, reviewedKeys) {
+  RA.mergeExtractedProfile = function (current, extracted) {
     const merged = Object.assign({}, current || {});
     const changed = [];
-    const reviewed = reviewedKeys ? new Set(reviewedKeys) : null;
     for (const [key, value] of Object.entries(extracted || {})) {
       if (key === 'skills') {
         const existing = new Map((merged.skills || []).map((s) => [String(s.name).toLowerCase(), s]));
@@ -111,8 +150,7 @@
         merged.skills = Array.from(existing.values());
         continue;
       }
-      const canFill = reviewed ? !reviewed.has(key) : !String(merged[key] || '').trim();
-      if (value !== '' && value != null && canFill) {
+      if (value !== '' && value != null && !String(merged[key] || '').trim()) {
         merged[key] = value;
         changed.push(key);
       }

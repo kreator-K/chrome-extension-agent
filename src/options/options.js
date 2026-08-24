@@ -56,7 +56,7 @@ async function mergeProfileFromText(text) {
   const extracted = RA.extractProfile(text);
   const raw = await RA.storage.get('profile');
   const current = Object.assign({}, RA.DEFAULT_PROFILE, raw.profile || {});
-  const result = RA.mergeExtractedProfile(current, extracted, Object.keys(raw.profile || {}));
+  const result = RA.mergeExtractedProfile(current, extracted);
   if (result.changed.length) await RA.storage.set({ profile: result.profile });
   return result.changed;
 }
@@ -155,6 +155,7 @@ $('applicationResumeFile').addEventListener('change', async (ev) => {
         mimeType: file.type || 'application/octet-stream',
         size: file.size,
         dataUrl: await fileAsDataUrl(file),
+        text: extractedText,
         updatedAt: Date.now()
       }
     });

@@ -72,7 +72,7 @@
     async getApplicationResume() {
       const { applicationResume } = await RA.storage.get('applicationResume');
       return applicationResume || {
-        fileName: '', mimeType: '', size: 0, dataUrl: '', updatedAt: 0
+        fileName: '', mimeType: '', size: 0, dataUrl: '', text: '', updatedAt: 0
       };
     },
     async getAnswerBank() {
