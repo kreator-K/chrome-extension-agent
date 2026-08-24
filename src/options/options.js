@@ -61,6 +61,40 @@ async function mergeProfileFromText(text) {
   return result.changed;
 }
 
+async function applicationResumeWithText() {
+  const file = await RA.storage.getApplicationResume();
+  if (file.text || !file.dataUrl || !/\.(?:pdf|docx)$/i.test(file.fileName || '')) return file;
+  try {
+    const buffer = await (await fetch(file.dataUrl)).arrayBuffer();
+    const extracted = /\.pdf$/i.test(file.fileName)
+      ? await window.PDFText.extract(buffer)
+      : await window.DOCXText.extract(buffer);
+    if (extracted.ok && extracted.text) {
+      const updated = Object.assign({}, file, { text: extracted.text });
+      await RA.storage.set({ applicationResume: updated });
+      return updated;
+    }
+  } catch (e) { /* keep the file attachment even when legacy text cannot be recovered */ }
+  return file;
+}
+
+async function allProfileSourceText(editorText) {
+  const [resume, applicationResume] = await Promise.all([
+    RA.storage.getResume(),
+    applicationResumeWithText()
+  ]);
+  const unique = [];
+  const seen = new Set();
+  for (const value of [editorText, resume.text, applicationResume.text]) {
+    const text = String(value || '').trim();
+    if (text && !seen.has(text)) {
+      seen.add(text);
+      unique.push(text);
+    }
+  }
+  return unique.join('\n\n');
+}
+
 /* ------------------------------------------------------------- knowledge base */
 
 async function loadResume() {
@@ -101,7 +135,7 @@ $('saveResume').addEventListener('click', async () => {
   await RA.storage.set({
     resume: { text, fileName: $('resumeMeta').textContent.split(' · ')[0] || 'pasted text', updatedAt: Date.now() }
   });
-  const changed = await mergeProfileFromText(text);
+  const changed = await mergeProfileFromText(await allProfileSourceText(text));
   await loadResume();
   if (changed.length) await loadProfile();
   status($('resumeStatus'), changed.length ? `Saved · filled ${changed.length} profile field(s).` : 'Saved.', 'ok');
@@ -122,9 +156,11 @@ function fileAsDataUrl(file) {
 }
 
 async function loadApplicationResume() {
-  const file = await RA.storage.getApplicationResume();
+  const file = await applicationResumeWithText();
   $('applicationResumeMeta').textContent = file.fileName
-    ? `${file.fileName} · ${(file.size / 1024).toFixed(1)} KB · saved ${new Date(file.updatedAt).toLocaleString()}`
+    ? `${file.fileName} · ${(file.size / 1024).toFixed(1)} KB` +
+      (file.text ? ` · ${file.text.length.toLocaleString()} text chars` : ' · attachment only') +
+      ` · saved ${new Date(file.updatedAt).toLocaleString()}`
     : 'No application resume saved.';
   $('clearApplicationResume').disabled = !file.fileName;
 }
@@ -148,6 +184,9 @@ $('applicationResumeFile').addEventListener('change', async (ev) => {
     if (/\.pdf$/i.test(file.name)) {
       const extracted = await window.PDFText.extract(await file.arrayBuffer());
       if (extracted.ok) extractedText = extracted.text;
+    } else if (/\.docx$/i.test(file.name)) {
+      const extracted = await window.DOCXText.extract(await file.arrayBuffer());
+      if (extracted.ok) extractedText = extracted.text;
     }
     await RA.storage.set({
       applicationResume: {
@@ -159,13 +198,16 @@ $('applicationResumeFile').addEventListener('change', async (ev) => {
         updatedAt: Date.now()
       }
     });
-    const kb = await RA.storage.getResume();
-    const changed = await mergeProfileFromText([kb.text, extractedText].filter(Boolean).join('\n\n'));
+    const changed = await mergeProfileFromText(await allProfileSourceText());
     await loadApplicationResume();
     if (changed.length) await loadProfile();
     status(
       $('applicationResumeStatus'),
-      changed.length ? `Saved and ready · filled ${changed.length} profile field(s).` : 'Saved and ready to attach.',
+      changed.length
+        ? `Saved and ready · read both sources and filled ${changed.length} profile field(s).`
+        : extractedText
+          ? 'Saved and ready · both sources checked; no new blank profile fields found.'
+          : 'Saved and ready to attach · no readable text was found in this file.',
       'ok'
     );
   } catch (err) {
@@ -255,9 +297,7 @@ $('saveProfile').addEventListener('click', async () => {
 });
 
 $('extractProfile').addEventListener('click', async () => {
-  const resume = await RA.storage.getResume();
-  const text = [$('resumeText').value, resume.text].filter(Boolean).join('\n\n');
-  const changed = await mergeProfileFromText(text);
+  const changed = await mergeProfileFromText(await allProfileSourceText($('resumeText').value));
   await loadProfile();
   status(
     $('profileStatus'),

@@ -9,32 +9,112 @@
   }
 
   function cleanUrl(url) {
-    return String(url || '').replace(/[),.;]+$/, '').replace(/^www\./i, 'https://www.');
+    return String(url || '').replace(/[\]),.;]+$/, '').replace(/^www\./i, 'https://www.');
+  }
+
+  function plainLine(line) {
+    return String(line || '')
+      .replace(/\[([^\]]+)\]\((?:mailto:)?[^)]+\)/g, '$1')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/^\s*(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+)/, '')
+      .replace(/^\s*\|\s*|\s*\|\s*$/g, '')
+      .replace(/\*\*|__|~~|`/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function cleanScalar(value) {
+    return plainLine(value)
+      .replace(/^\s*[:|–—-]\s*/, '')
+      .replace(/\s*\|\s*$/, '')
+      .replace(/^["']|["']$/g, '')
+      .trim();
+  }
+
+  function labelled(lines, labels) {
+    const re = new RegExp('^(?:' + labels + ')\\s*(?::|\\||[–—-])\\s*(.+)$', 'i');
+    for (const line of lines) {
+      const m = line.match(re);
+      if (m && cleanScalar(m[1])) return cleanScalar(m[1]);
+    }
+    return '';
+  }
+
+  function namePart(value) {
+    value = cleanScalar(value);
+    return /^[A-Za-zÀ-ÖØ-öø-ÿ'’-]+$/.test(value) ? value : '';
   }
 
   function plausibleName(line) {
-    const value = String(line || '').trim();
+    const value = cleanScalar(line);
     if (!value || value.length > 60 || /[@/:|\d]/.test(value)) return '';
-    if (/\b(resume|résumé|curriculum vitae|summary|experience|education|skills|engineer|manager|developer|analyst|scientist)\b/i.test(value)) return '';
+    if (/\b(resume|résumé|curriculum vitae|knowledge|candidate|contact|identity|profile|summary|experience|education|skills|work|preferences|projects|certifications|awards|engineer|manager|developer|analyst|scientist|university|college|school|institute)\b/i.test(value)) return '';
     const words = value.split(/\s+/);
-    if (words.length < 2 || words.length > 4 || words.some((w) => !/^[A-Za-zÀ-ÖØ-öø-ÿ'’-]+$/.test(w))) return '';
+    if (words.length < 2 || words.length > 5 || words.some((w) => !/^[A-Za-zÀ-ÖØ-öø-ÿ'’.-]+$/.test(w))) return '';
     return value;
+  }
+
+  function putFullName(out, value) {
+    const name = plausibleName(value);
+    if (!name) return;
+    const words = name.split(/\s+/);
+    out.firstName = words[0];
+    out.lastName = words.slice(1).join(' ');
+  }
+
+  function putLocation(out, value) {
+    value = cleanScalar(value).replace(/^(?:location|based in)\s*:?\s*/i, '');
+    const parts = value.split(',').map((part) => part.trim()).filter(Boolean);
+    if (!parts.length) return false;
+    const stateZip = (parts[1] || '').match(/^([A-Za-z .'-]{2,40}?)(?:\s+(\d{4,10}(?:-\d{4})?))?$/);
+    if (parts.length >= 2 && /^[A-Za-z .'-]+$/.test(parts[0]) && stateZip) {
+      out.city = parts[0];
+      out.state = stateZip[1].length === 2 ? stateZip[1].toUpperCase() : stateZip[1];
+      if (stateZip[2]) out.postalCode = stateZip[2];
+      if (parts[2]) out.country = parts.slice(2).join(', ');
+      else if (/^[A-Z]{2}$/.test(out.state)) out.country = 'USA';
+      return true;
+    }
+    return false;
+  }
+
+  function cleanSchool(value) {
+    value = cleanScalar(value)
+      .replace(/^(?:school|university|college|institution)\s*:?\s*/i, '')
+      .replace(/\s*,?\s*(?:19|20)\d{2}.*$/, '')
+      .trim();
+    const part = value.split(/\s*[|;·]\s*/).find((item) =>
+      /\b(?:university|college|institute of technology|polytechnic|school of)\b/i.test(item)
+    );
+    return cleanScalar(part || value);
   }
 
   RA.extractProfile = function (text) {
     text = String(text || '');
-    const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-    const topLines = lines.slice(0, 12);
+    const rawLines = text.split(/\r?\n/).filter((line) => line.trim());
+    const lines = rawLines.map(plainLine).filter(Boolean);
+    const topLines = lines.slice(0, 20);
     const out = {};
 
-    const name = topLines.map(plausibleName).find(Boolean);
-    if (name) {
-      const words = name.split(/\s+/);
-      out.firstName = words[0];
-      out.lastName = words.slice(1).join(' ');
+    const fullName = labelled(lines, 'full\\s+name|legal\\s+name|preferred\\s+name|candidate(?:\\s+name)?|name');
+    if (fullName) putFullName(out, fullName);
+    const labelledFirst = labelled(lines, 'first\\s+name|given\\s+name');
+    const labelledLast = labelled(lines, 'last\\s+name|family\\s+name|surname');
+    if (labelledFirst && namePart(labelledFirst)) out.firstName = namePart(labelledFirst);
+    if (labelledLast && namePart(labelledLast)) out.lastName = namePart(labelledLast);
+    if (!out.firstName || !out.lastName) {
+      const headingName = rawLines.filter((line) => /^\s*#\s+/.test(line)).map(plausibleName).find(Boolean);
+      const fallbackName = headingName || topLines.map(plausibleName).find(Boolean);
+      if (fallbackName) {
+        const candidate = {};
+        putFullName(candidate, fallbackName);
+        if (!out.firstName) out.firstName = candidate.firstName;
+        if (!out.lastName) out.lastName = candidate.lastName;
+      }
     }
 
-    const emailText = text.replace(/\s*@\s*/g, '@').replace(/\s*\.\s*(com|org|net|edu|io|co)\b/gi, '.$1');
+    const emailText = text.replace(/mailto:/gi, '').replace(/\s*@\s*/g, '@')
+      .replace(/\s*\.\s*(com|org|net|edu|io|co|ai|us|ca|uk)\b/gi, '.$1');
     const email = firstMatch(emailText, /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i);
     if (email) out.email = email;
 
@@ -50,19 +130,22 @@
       else if (!out.portfolio && !/linkedin\.com|github\.com/i.test(url)) out.portfolio = url;
     }
 
-    const locationLine = topLines.find((line) => /^[A-Za-z .'-]+,\s*[A-Z]{2}(?:\s+\d{5})?(?:,\s*(?:USA|US|United States))?$/i.test(line));
-    if (locationLine) {
-      const parts = locationLine.split(',').map((part) => part.trim());
-      out.city = parts[0] || '';
-      const stateZip = (parts[1] || '').match(/^([A-Z]{2})(?:\s+(\d{5}))?$/i);
-      if (stateZip) {
-        out.state = stateZip[1].toUpperCase();
-        if (stateZip[2]) out.postalCode = stateZip[2];
-      }
-      out.country = parts[2] || (stateZip ? 'USA' : '');
+    const labelledLocation = labelled(lines, 'location|based\\s+in|city(?:\\s*[\\/&,]\\s*state)?');
+    if (labelledLocation) putLocation(out, labelledLocation);
+    if (!out.city) {
+      const locationLine = topLines.find((line) => /^[A-Za-z .'-]+,\s*[A-Za-z .'-]{2,40}(?:\s+\d{4,10}(?:-\d{4})?)?(?:,\s*[A-Za-z .'-]+)?$/.test(line));
+      if (locationLine) putLocation(out, locationLine);
     }
+    const country = labelled(lines, 'country');
+    const postalCode = labelled(lines, 'postal\\s+code|zip(?:\\s+code)?');
+    const address = labelled(lines, 'street\\s+address|address(?:\\s+line\\s*1)?');
+    if (country) out.country = country;
+    if (postalCode && /^[A-Za-z0-9 -]{3,12}$/.test(postalCode)) out.postalCode = postalCode;
+    if (address) out.addressLine = address;
 
-    const years = firstMatch(text, /\b(\d{1,2})\+?\s+years?(?:\s+of)?\s+(?:professional\s+)?experience\b/i, 1);
+    const yearsLabel = labelled(lines, 'total\\s+years(?:\\s+of\\s+experience)?|years\\s+of\\s+experience|professional\\s+experience');
+    const years = firstMatch(yearsLabel, /\b(\d{1,2})\b/, 1) ||
+      firstMatch(text, /\b(\d{1,2})\+?\s+years?(?:\s+of)?\s+(?:professional\s+)?experience\b/i, 1);
     if (years) out.totalYearsExperience = years;
 
     const degreePatterns = [
@@ -71,46 +154,49 @@
       [/\b(?:B\.?S\.?|B\.?A\.?|Bachelor(?:'s| of [A-Za-z ]+))\b/i, "Bachelor's"],
       [/\bAssociate(?:'s)?\b/i, "Associate's"]
     ];
+    const labelledDegree = labelled(lines, 'highest\\s+degree|degree(?:\\s+level)?|qualification');
     for (const [re, label] of degreePatterns) {
-      if (re.test(text)) { out.degreeLevel = label; break; }
+      if (re.test(labelledDegree || text)) { out.degreeLevel = label; break; }
     }
     const degreeLine = lines.find((line) => /\b(?:Ph\.?D\.?|Doctor|M\.?S\.?|M\.?A\.?|MBA|Master|B\.?S\.?|B\.?A\.?|Bachelor|Associate)\b/i.test(line));
-    if (degreeLine) {
+    const labelledMajor = labelled(lines, 'major(?:\\s*\\/\\s*field\\s+of\\s+study)?|field\\s+of\\s+study|concentration|specialization');
+    if (labelledMajor) out.major = labelledMajor;
+    if (degreeLine && !out.major) {
       const major = firstMatch(degreeLine, /\b(?:in|of)\s+([A-Za-z][A-Za-z &/-]{2,60}?)(?=\s*[|,;·]|\s+(?:19|20)\d{2}\b|$)/i, 1);
       if (major && !/philosophy$/i.test(major)) out.major = major;
-      const yearOnDegree = firstMatch(degreeLine, /\b(19\d{2}|20\d{2})\b/, 1);
-      if (yearOnDegree) out.gradYear = yearOnDegree;
     }
-    const schoolLine = lines.find((line) => /\b(?:university|college|institute of technology|polytechnic|school of)\b/i.test(line) && line.length < 180);
-    if (schoolLine) {
-      const schoolPart = schoolLine
-        .split(/\s*[|;·]\s*/)
-        .find((part) => /\b(?:university|college|institute of technology|polytechnic|school of)\b/i.test(part));
-      out.school = String(schoolPart || schoolLine).replace(/\s*,?\s*(?:19|20)\d{2}.*$/, '').trim();
+    const labelledSchool = labelled(lines, 'school|university|college|institution');
+    if (labelledSchool && /[A-Za-z]/.test(labelledSchool)) out.school = cleanSchool(labelledSchool);
+    if (!out.school) {
+      const schoolLine = lines.find((line) => /\b(?:university|college|institute of technology|polytechnic|school of)\b/i.test(line) && line.length < 180);
+      if (schoolLine) out.school = cleanSchool(schoolLine);
     }
-    const gradYear = firstMatch(text, /\b(?:graduated|graduation|class of)\s*:?[ \t]*(20\d{2}|19\d{2})\b/i, 1);
-    if (gradYear && !out.gradYear) out.gradYear = gradYear;
+    const labelledGradYear = labelled(lines, 'graduation\\s+year|graduated|class\\s+of');
+    const gradYear = firstMatch(labelledGradYear || text, /\b(19\d{2}|20\d{2})\b/, 1);
+    if (gradYear) out.gradYear = gradYear;
 
-    const titleWords = /\b(?:engineer|manager|director|developer|analyst|scientist|architect|consultant|designer|specialist|administrator|coordinator|researcher|product lead|team lead)\b/i;
-    const atRole = text.match(/^\s*([^\n|]{3,80}?)\s+at\s+([^\n|]{2,80})\s*$/im);
-    if (atRole && titleWords.test(atRole[1])) {
-      out.currentTitle = atRole[1].trim();
-      out.currentCompany = atRole[2].replace(/\s*[|,;·]\s*(?:19|20)\d{2}.*$/, '').trim();
-    } else {
-      const experienceIndex = lines.findIndex((line) => /^\s*(?:professional\s+)?experience\s*$/i.test(line));
-      const candidates = experienceIndex >= 0 ? lines.slice(experienceIndex + 1, experienceIndex + 8) : topLines;
-      for (let i = 0; i < candidates.length && !out.currentTitle; i++) {
-        const parts = candidates[i].split(/\s*[|;·]\s*/).map((part) => part.trim()).filter(Boolean);
-        const titlePart = parts.find((part) => titleWords.test(part));
-        if (!titlePart) continue;
-        out.currentTitle = titlePart.replace(/\s*[,-]?\s*(?:19|20)\d{2}.*$/, '').trim();
-        const companyPart = parts.find((part) => part !== titlePart && !/(?:19|20)\d{2}|present|current/i.test(part));
-        if (companyPart) out.currentCompany = companyPart;
-        else {
-          const adjacent = [candidates[i - 1], candidates[i + 1]].find((line) =>
-            line && line.length < 100 && !titleWords.test(line) && !/(?:19|20)\d{2}|present|current/i.test(line)
-          );
-          if (adjacent) out.currentCompany = adjacent;
+    const labelledTitle = labelled(lines, 'current\\s+(?:job\\s+)?title|job\\s+title|current\\s+role|role');
+    const labelledCompany = labelled(lines, 'current\\s+(?:employer|company)|employer|company');
+    if (labelledTitle) out.currentTitle = labelledTitle;
+    if (labelledCompany) out.currentCompany = labelledCompany;
+    const titleWords = /\b(?:engineer|manager|director|developer|analyst|scientist|architect|consultant|designer|specialist|administrator|coordinator|researcher|product lead|team lead|founder|president|officer)\b/i;
+    if (!out.currentTitle) {
+      const atRole = lines.map((line) => line.match(/^([^|]{3,80}?)\s+at\s+([^|]{2,80})$/i)).find(Boolean);
+      if (atRole && titleWords.test(atRole[1])) {
+        out.currentTitle = atRole[1].trim();
+        if (!out.currentCompany) out.currentCompany = atRole[2].replace(/\s*[|,;·]\s*(?:19|20)\d{2}.*$/, '').trim();
+      } else {
+        const experienceIndex = lines.findIndex((line) => /^(?:professional\s+)?experience$/i.test(line));
+        const candidates = experienceIndex >= 0 ? lines.slice(experienceIndex + 1, experienceIndex + 8) : topLines;
+        for (const parts of candidates.map((line) => line.split(/\s*[|;·]\s*/).map((part) => part.trim()).filter(Boolean))) {
+          const titlePart = parts.find((part) => titleWords.test(part));
+          if (!titlePart) continue;
+          out.currentTitle = titlePart.replace(/\s*[,-]?\s*(?:19|20)\d{2}.*$/, '').trim();
+          if (!out.currentCompany) {
+            const companyPart = parts.find((part) => part !== titlePart && !/(?:19|20)\d{2}|present|current/i.test(part));
+            if (companyPart) out.currentCompany = companyPart;
+          }
+          break;
         }
       }
     }
@@ -127,13 +213,10 @@
       if (skill.length >= 2 && skill.split(/\s+/).length <= 5) {
         const key = skill.toLowerCase();
         const yearsValue = Number(match[2]);
-        if (!skillMap.has(key) || skillMap.get(key).years < yearsValue) {
-          skillMap.set(key, { name: skill, years: yearsValue });
-        }
+        if (!skillMap.has(key) || skillMap.get(key).years < yearsValue) skillMap.set(key, { name: skill, years: yearsValue });
       }
     }
     if (skillMap.size) out.skills = Array.from(skillMap.values()).slice(0, 50);
-
     return out;
   };
 

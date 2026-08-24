@@ -12,6 +12,35 @@ const LIBS = ['src/lib/util.js', 'src/lib/rules.js', 'src/lib/fields.js', 'src/l
   .map((file) => path.join(ROOT, file));
 const CONTENT = path.join(ROOT, 'src', 'content', 'content.js');
 
+function storedZip(name, content) {
+  const fileName = Buffer.from(name);
+  const data = Buffer.from(content);
+  const local = Buffer.alloc(30);
+  local.writeUInt32LE(0x04034b50, 0);
+  local.writeUInt16LE(20, 4);
+  local.writeUInt32LE(data.length, 18);
+  local.writeUInt32LE(data.length, 22);
+  local.writeUInt16LE(fileName.length, 26);
+
+  const central = Buffer.alloc(46);
+  central.writeUInt32LE(0x02014b50, 0);
+  central.writeUInt16LE(20, 4);
+  central.writeUInt16LE(20, 6);
+  central.writeUInt32LE(data.length, 20);
+  central.writeUInt32LE(data.length, 24);
+  central.writeUInt16LE(fileName.length, 28);
+
+  const centralOffset = local.length + fileName.length + data.length;
+  const centralSize = central.length + fileName.length;
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(1, 8);
+  end.writeUInt16LE(1, 10);
+  end.writeUInt32LE(centralSize, 12);
+  end.writeUInt32LE(centralOffset, 16);
+  return Buffer.concat([local, fileName, data, central, fileName, end]);
+}
+
 (async () => {
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ra-workflow-'));
   const context = await chromium.launchPersistentContext(userDataDir, {
@@ -27,27 +56,51 @@ const CONTENT = path.join(ROOT, 'src', 'content', 'content.js');
     await options.goto(`chrome-extension://${extId}/src/options/options.html`);
     await options.waitForSelector('#profileGrid label');
 
-    const knowledgeBase = `PROFESSIONAL RESUME
-Alex Rivera
-Austin, TX 78701
-alex.rivera@example.com | +1 (512) 555-0199
-linkedin.com/in/alexrivera | github.com/alexrivera
+    const knowledgeBase = `# Candidate knowledge base
 
-Backend engineer with 8+ years of professional experience.
+## Contact
+- **Email:** alex.rivera@example.com
+- **GitHub:** [Projects](https://github.com/alexrivera)
+
+## Work preferences
 Authorized to work in the United States without sponsorship.
 Python (6 years) · Kubernetes — 3 yrs
-Master's in Computer Science | Example University | 2018
 
-PROFESSIONAL EXPERIENCE
-Senior Backend Engineer | Acme Corp | 2022 - Present`;
+## Education
+- **Highest degree:** Master's
+- **School:** Example University
+- **Major / field of study:** Computer Science
+- **Graduation year:** 2018`;
 
     await options.setInputFiles('#kbFile', {
       name: 'resume-knowledge-base.txt',
       mimeType: 'text/plain',
       buffer: Buffer.from(knowledgeBase)
     });
-    await options.waitForFunction(() => document.getElementById('resumeText').value.includes('Alex Rivera'));
+    await options.waitForFunction(() => document.getElementById('resumeText').value.includes('Candidate knowledge base'));
     await options.click('#saveResume');
+    await options.waitForFunction(() => document.getElementById('p_email').value === 'alex.rivera@example.com');
+    assert.strictEqual(await options.inputValue('#p_firstName'), '', 'KB intentionally leaves the name for the application resume');
+
+    const applicationResumeText = `Name: Alex Rivera
+Phone: +1 (512) 555-0199
+Location: Austin, TX 78701, USA
+LinkedIn: https://linkedin.com/in/alexrivera
+Current title: Senior Backend Engineer
+Current company: Acme Corp
+Total years of experience: 8 years`;
+    const applicationResumeDocx = storedZip(
+      'word/document.xml',
+      '<?xml version="1.0" encoding="UTF-8"?>' +
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+      applicationResumeText.split('\n').map((line) => `<w:p><w:r><w:t>${line}</w:t></w:r></w:p>`).join('') +
+      '</w:body></w:document>'
+    );
+    await options.setInputFiles('#applicationResumeFile', {
+      name: 'Alex_Rivera_Resume.docx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      buffer: applicationResumeDocx
+    });
     await options.waitForFunction(() => document.getElementById('p_firstName').value === 'Alex');
 
     assert.strictEqual(await options.inputValue('#p_lastName'), 'Rivera');
@@ -61,23 +114,28 @@ Senior Backend Engineer | Acme Corp | 2022 - Present`;
 
     // Re-running extraction must still fill blanks left by a previous partial pass.
     await options.evaluate(() => new Promise((resolve) => {
-      chrome.storage.local.get('profile', ({ profile }) => {
+      chrome.storage.local.get(['profile', 'applicationResume'], ({ profile, applicationResume }) => {
         profile.phone = '';
-        chrome.storage.local.set({ profile }, resolve);
+        applicationResume.text = ''; // simulate a DOCX stored by v0.3.1 before text extraction existed
+        chrome.storage.local.set({ profile, applicationResume }, resolve);
       });
     }));
+    await options.fill('#p_phone', '');
     await options.click('#extractProfile');
+    await options.waitForFunction(() => new Promise((resolve) => {
+      chrome.storage.local.get('applicationResume', ({ applicationResume }) => {
+        resolve((applicationResume.text || '').includes('Name: Alex Rivera'));
+      });
+    }));
     await options.waitForFunction(() => document.getElementById('p_phone').value.includes('512'));
-
-    await options.setInputFiles('#applicationResumeFile', {
-      name: 'Alex_Rivera_Resume.docx',
-      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      buffer: Buffer.from('workflow-docx-bytes')
-    });
-    await options.waitForFunction(() => /Alex_Rivera_Resume\.docx/.test(document.getElementById('applicationResumeMeta').textContent));
+    const migratedResumeText = await options.evaluate(() => new Promise((resolve) => {
+      chrome.storage.local.get('applicationResume', ({ applicationResume }) => resolve(applicationResume.text));
+    }));
+    assert.ok(migratedResumeText.includes('Name: Alex Rivera'), 'backfills text from a previously stored DOCX');
 
     const store = await options.evaluate(() => new Promise((resolve) => chrome.storage.local.get(null, resolve)));
     assert.strictEqual(store.applicationResume.fileName, 'Alex_Rivera_Resume.docx');
+    assert.ok(store.applicationResume.text.includes('Name: Alex Rivera'), 'DOCX text is stored for profile extraction');
     assert.strictEqual(store.profile.firstName, 'Alex');
 
     const application = await context.newPage();

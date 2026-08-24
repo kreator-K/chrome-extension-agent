@@ -60,4 +60,44 @@ assert.strictEqual(pollutedDefaults.profile.firstName, 'Alex', 'fills blanks eve
 assert.strictEqual(pollutedDefaults.profile.email, extracted.email);
 assert.strictEqual(pollutedDefaults.profile.degreeLevel, "Master's", 'preserves nonblank reviewed/default values');
 
+const markdownKnowledgeBase = `# Candidate Knowledge Base
+
+## Contact and identity
+- **Name:** Prashant Kumar
+- **Email:** [prashant.kumar@example.com](mailto:prashant.kumar@example.com)
+- **Phone:** +1 (607) 555-0142
+- **Location:** Ithaca, NY 14850, USA
+- **LinkedIn:** [Profile](https://linkedin.com/in/prashant-kumar)
+- **GitHub:** [Projects](https://github.com/kreator-K)
+
+## Current work
+| Current title | Product Strategy Consultant |
+| Current company | Example Advisory LLC |
+| Total years of experience | 12 years |
+
+## Education
+- **Highest degree:** Master's
+- **School:** Cornell SC Johnson College of Business
+- **Major / field of study:** Business Administration
+- **Graduation year:** 2024`;
+
+const markdown = ctx.RA.extractProfile(markdownKnowledgeBase);
+assert.strictEqual(markdown.firstName, 'Prashant');
+assert.strictEqual(markdown.lastName, 'Kumar');
+assert.strictEqual(markdown.email, 'prashant.kumar@example.com');
+assert.match(markdown.phone, /607/);
+assert.strictEqual(markdown.city, 'Ithaca');
+assert.strictEqual(markdown.state, 'NY');
+assert.strictEqual(markdown.postalCode, '14850');
+assert.strictEqual(markdown.country, 'USA');
+assert.strictEqual(markdown.linkedin, 'https://linkedin.com/in/prashant-kumar');
+assert.strictEqual(markdown.github, 'https://github.com/kreator-K');
+assert.strictEqual(markdown.currentTitle, 'Product Strategy Consultant');
+assert.strictEqual(markdown.currentCompany, 'Example Advisory LLC');
+assert.strictEqual(markdown.totalYearsExperience, '12');
+assert.strictEqual(markdown.school, 'Cornell SC Johnson College of Business');
+assert.strictEqual(markdown.major, 'Business Administration');
+assert.strictEqual(markdown.gradYear, '2024');
+assert.ok(!/[#*|]/.test(markdown.school), 'does not leak Markdown formatting into profile fields');
+
 console.log('Profile extraction and non-destructive merge assertions passed');

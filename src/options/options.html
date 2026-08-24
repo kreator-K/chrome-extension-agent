@@ -37,7 +37,8 @@
         <p class="hint">
           This is the actual file attached to résumé/CV upload fields on applications.
           It stays separate from the text knowledge base and is never sent to Anthropic.
-          PDF is recommended; DOC and DOCX are also supported. Maximum size: 5 MB.
+          PDF or DOCX is recommended so profile facts can also be read from the file.
+          Legacy DOC files can be attached but not text-extracted. Maximum size: 5 MB.
         </p>
         <div class="row">
           <input type="file" id="applicationResumeFile" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
@@ -139,6 +140,7 @@
     <script src="../lib/util.js"></script>
     <script src="../lib/profile_parser.js"></script>
     <script src="pdf.js"></script>
+    <script src="docx.js"></script>
     <script src="options.js"></script>
   </body>
 </html>

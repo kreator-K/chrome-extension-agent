@@ -19,8 +19,10 @@ the one above it has nothing:
 2. **Profile rules** — ~45 deterministic rules over a structured profile: name,
    contact, links, work authorization, sponsorship, years of experience per
    skill, notice period, salary expectation, relocation, education, EEO
-   defaults. The extension extracts unambiguous fields from the resume and
-   knowledge base locally, then leaves the profile visible for review. No model
+   defaults. The extension combines the knowledge base with readable text from
+   the separately uploaded application resume, extracts unambiguous fields
+   locally, then leaves the profile visible for review. PDF and DOCX resumes
+   support text extraction; legacy DOC files remain attachment-only. No model
    call, no cost, no chance of invention.
 3. **Claude** — the open-ended ones ("Why this company?", "Describe a time
    you…", "What interests you about this role?"). The service worker sends the
@@ -135,7 +137,7 @@ src/popup/               status and manual trigger
 ```
 npm install
 npx playwright install chromium
-npm test              # all five
+npm test              # full regression suite
 npm run test:logic    # rules, matching and retrieval, in Node
 npm run test:keywords # ATS/match scoring against fixture job descriptions, in Node
 npm run test:dom      # scan + fill against a fixture form in real Chromium
