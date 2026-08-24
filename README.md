@@ -112,6 +112,7 @@ src/lib/util.js          storage, text normalisation, fuzzy match, retrieval
 src/lib/rules.js         deterministic profile-driven answers
 src/lib/fields.js        form scanning, label extraction, framework-safe filling
 src/lib/keywords.js      offline resume/JD match scoring and keyword extraction
+src/lib/prompts.js       grounded, question-aware AI prompt construction
 src/content/content.js   in-page orchestration and the review panel
 src/background/          Anthropic API calls; the only place the key is used
 src/options/             knowledge base, profile, settings, answer bank, PDF text, ATS checklist
@@ -121,6 +122,8 @@ src/popup/               status and manual trigger
 ## Tests
 
 ```
+npm install
+npx playwright install chromium
 npm test              # all five
 npm run test:logic    # rules, matching and retrieval, in Node
 npm run test:keywords # ATS/match scoring against fixture job descriptions, in Node
@@ -129,9 +132,9 @@ npm run test:panel    # match-score panel rendering against a fixture JD page
 npm run test:load     # loads the unpacked extension and pokes the service worker
 ```
 
-The DOM and load tests use Playwright's Chromium. If Playwright is installed
-globally rather than in the project, run them with
-`NODE_PATH=$(npm root -g) node test/dom.test.js`.
+The DOM, panel and load tests use Playwright's Chromium. Playwright is a local
+development dependency; its browser runtime is installed separately by the
+second command above.
 
 ## Known limits
 

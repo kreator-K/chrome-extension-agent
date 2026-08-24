@@ -1,6 +1,6 @@
 /* Service worker: owns the Anthropic API key and every network call.
  * Content scripts never see the key and never talk to api.anthropic.com. */
-importScripts('../lib/util.js', '../lib/rules.js', '../lib/keywords.js');
+importScripts('../lib/util.js', '../lib/rules.js', '../lib/keywords.js', '../lib/prompts.js');
 
 const RA = self.RA;
 const API_URL = 'https://api.anthropic.com/v1/messages';
@@ -48,69 +48,6 @@ const MATCH_SCHEMA = {
   required: ['summary', 'keywordSuggestions'],
   additionalProperties: false
 };
-
-function profileSummary(p) {
-  const lines = [];
-  const push = (k, v) => { if (v !== '' && v != null) lines.push(`${k}: ${v}`); };
-  push('Name', [p.firstName, p.lastName].filter(Boolean).join(' '));
-  push('Email', p.email);
-  push('Phone', p.phone);
-  push('Location', [p.city, p.state, p.country].filter(Boolean).join(', '));
-  push('LinkedIn', p.linkedin);
-  push('GitHub', p.github);
-  push('Portfolio', p.portfolio);
-  push('Current role', [p.currentTitle, p.currentCompany].filter(Boolean).join(' at '));
-  push('Total years of experience', p.totalYearsExperience);
-  push('Education', [p.degreeLevel, p.major, p.school, p.gradYear].filter(Boolean).join(', '));
-  push('Work authorized', p.workAuthorized);
-  push('Requires sponsorship', p.requiresSponsorship);
-  push('Work authorization detail', p.workAuthDetail);
-  push('Willing to relocate', p.willingToRelocate);
-  push('Preferred work mode', p.workMode);
-  push('Notice period (days)', p.noticePeriodDays);
-  push('Earliest start date', p.earliestStartDate);
-  push('Desired compensation', p.desiredSalary);
-  if ((p.skills || []).length) {
-    push('Skills with years', p.skills.map((s) => `${s.name} (${s.years}y)`).join(', '));
-  }
-  return lines.join('\n');
-}
-
-function systemPrompt(settings, profile, resumeExcerpt, priorAnswers) {
-  return [
-    'You fill in job application forms on behalf of one candidate.',
-    'You are given the candidate\'s resume knowledge base, a structured profile, and a list of questions taken from an application form.',
-    '',
-    'Rules:',
-    '- Answer only from the resume, the profile, and the previously approved answers. Never invent employers, titles, dates, degrees, certifications, or metrics.',
-    '- If the resume does not support an answer, return an empty string for `answer` and a confidence of 0 rather than guessing.',
-    '- Match the requested format exactly: a number-only question gets a bare number, a yes/no question gets "Yes" or "No", a multiple-choice question gets one of the offered options verbatim.',
-    '- Respect any stated character limit.',
-    `- Prose answers: ${settings.tone}. Ground every claim in something in the resume. No greetings, no sign-offs, no "As an AI".`,
-    '- Do not answer demographic, salary-history, or criminal-record questions from inference; return an empty string for those.',
-    '',
-    '=== CANDIDATE PROFILE ===',
-    profileSummary(profile),
-    '',
-    '=== RESUME KNOWLEDGE BASE ===',
-    resumeExcerpt || '(empty — say so by returning empty answers)',
-    priorAnswers ? '\n=== PREVIOUSLY APPROVED ANSWERS (reuse the candidate\'s own wording where relevant) ===\n' + priorAnswers : ''
-  ].join('\n');
-}
-
-function questionBlock(questions) {
-  return questions
-    .map((q) => {
-      const parts = [`id: ${q.id}`, `question: ${q.label}`, `field type: ${q.kind}`];
-      if (q.options && q.options.length) {
-        parts.push('allowed options: ' + q.options.map((o) => o.label).join(' | '));
-      }
-      if (q.maxLength) parts.push(`max characters: ${q.maxLength}`);
-      if (q.required) parts.push('required: yes');
-      return parts.join('\n');
-    })
-    .join('\n---\n');
-}
 
 async function callClaude(settings, body) {
   const res = await fetch(API_URL, {
@@ -163,7 +100,7 @@ async function generateAnswers({ questions, pageContext }) {
       format: { type: 'json_schema', schema: ANSWER_SCHEMA }
     },
     fallbacks: 'default',
-    system: systemPrompt(settings, profile, resumeExcerpt, priorAnswers),
+    system: RA.buildAnswerSystemPrompt(settings, profile, resumeExcerpt, priorAnswers),
     messages: [
       {
         role: 'user',
@@ -174,7 +111,7 @@ async function generateAnswers({ questions, pageContext }) {
           (pageContext && pageContext.jobDescription
             ? `\n\nJob description excerpt:\n${RA.truncate(pageContext.jobDescription, 4000)}`
             : '') +
-          `\n\nAnswer each of these form questions:\n\n${questionBlock(limited)}`
+          `\n\nAnswer each of these form questions:\n\n${RA.buildQuestionBlock(limited)}`
       }
     ]
   };
@@ -249,7 +186,7 @@ async function analyzeMatch({ jobDescription, jobTitle, company }) {
       '- Never suggest keyword stuffing (dumping unrelated terms into a skills list just to match). Every suggestion must point to a specific, truthful place it belongs.',
       '',
       '=== CANDIDATE PROFILE ===',
-      profileSummary(profile),
+      RA.profileSummary(profile),
       '',
       '=== RESUME (relevant excerpt) ===',
       resumeExcerpt

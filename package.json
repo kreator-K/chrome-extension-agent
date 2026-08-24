@@ -5,10 +5,13 @@
   "description": "Chrome extension that answers job application questions from a resume knowledge base and scores the resume against the job description.",
   "scripts": {
     "test": "npm run test:logic && npm run test:keywords && npm run test:dom && npm run test:panel && npm run test:load",
-    "test:logic": "node test/rules.test.js",
+    "test:logic": "node test/rules.test.js && node test/prompts.test.js",
     "test:keywords": "node test/keywords.test.js",
     "test:dom": "node test/dom.test.js",
     "test:panel": "node test/panel.test.js",
     "test:load": "node test/load.test.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1"
   }
 }
