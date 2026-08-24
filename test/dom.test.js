@@ -1,0 +1,67 @@
+/* Drives the DOM layer (scanFields / fillField) in real Chromium via Playwright. */
+const path = require('path');
+const assert = require('assert');
+const { chromium } = require('playwright');
+
+const FILES = ['src/lib/util.js', 'src/lib/rules.js', 'src/lib/fields.js']
+  .map((f) => path.join(__dirname, '..', f));
+
+(async () => {
+  const browser = await chromium.launch();
+  const page = await browser.newPage();
+  await page.goto('file://' + path.join(__dirname, 'fixtures', 'form.html'));
+  await page.addInitScript(() => {});
+  for (const file of FILES) await page.addScriptTag({ path: file });
+
+  const fields = await page.evaluate(() => window.RA.scanFields(document));
+  const byLabel = (needle) => fields.find((f) => f.label.toLowerCase().includes(needle));
+
+  console.log(fields.map((f) => `${f.kind.padEnd(8)} ${f.label}`).join('\n'));
+
+  assert.ok(byLabel('first name'), 'finds a label[for] text input');
+  assert.ok(byLabel('email address'), 'finds the email input');
+  assert.ok(byLabel('legally authorized'), 'finds an aria-labelledby select');
+  assert.strictEqual(byLabel('legally authorized').kind, 'select');
+  assert.ok(byLabel('sponsorship'), 'finds the radio group by its legend');
+  assert.strictEqual(byLabel('sponsorship').kind, 'radio');
+  assert.strictEqual(byLabel('sponsorship').options.length, 2);
+  assert.strictEqual(byLabel('why do you want').kind, 'textarea');
+  assert.strictEqual(byLabel('why do you want').maxLength, 300);
+  assert.ok(byLabel('years of experience'), 'finds the years-of-experience input');
+  assert.ok(byLabel('certify'), 'finds the checkbox');
+  assert.ok(!fields.some((f) => /search/i.test(f.label)), 'skips the search box');
+  assert.ok(!fields.some((f) => /csrf/i.test(f.label)), 'skips hidden inputs');
+
+  const result = await page.evaluate((ids) => {
+    const R = window.RA;
+    const out = {};
+    out.text = R.fillField(ids.fn, 'Prashant');
+    out.select = R.fillField(ids.auth, 'Yes');
+    out.radio = R.fillField(ids.sponsor, 'No');
+    out.textarea = R.fillField(ids.why, 'x'.repeat(400));
+    out.checkbox = R.fillField(ids.tos, 'Yes');
+    out.dom = {
+      fn: document.getElementById('fn').value,
+      auth: document.getElementById('auth').value,
+      sponsor: (document.querySelector('input[name=sponsor]:checked') || {}).value,
+      whyLen: document.getElementById('why').value.length,
+      tos: document.getElementById('tos').checked
+    };
+    return out;
+  }, {
+    fn: byLabel('first name').id,
+    auth: byLabel('legally authorized').id,
+    sponsor: byLabel('sponsorship').id,
+    why: byLabel('why do you want').id,
+    tos: byLabel('certify').id
+  });
+
+  assert.strictEqual(result.dom.fn, 'Prashant');
+  assert.strictEqual(result.dom.auth, 'y', 'select resolved "Yes" to the y option');
+  assert.strictEqual(result.dom.sponsor, 'no', 'radio resolved "No"');
+  assert.strictEqual(result.dom.whyLen, 300, 'textarea respected maxlength');
+  assert.strictEqual(result.dom.tos, true);
+
+  await browser.close();
+  console.log('\nAll DOM assertions passed');
+})().catch((err) => { console.error(err); process.exit(1); });

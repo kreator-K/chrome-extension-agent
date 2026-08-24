@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "Resume Autofill — Job Application Assistant",
+  "version": "0.1.0",
+  "description": "Answers job application questions on LinkedIn and other portals using your resume knowledge base.",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": ["https://api.anthropic.com/*"],
+  "background": {
+    "service_worker": "src/background/service_worker.js"
+  },
+  "options_page": "src/options/options.html",
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_title": "Resume Autofill"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.linkedin.com/*",
+        "https://*.greenhouse.io/*",
+        "https://*.lever.co/*",
+        "https://*.ashbyhq.com/*",
+        "https://*.myworkdayjobs.com/*",
+        "https://*.workable.com/*",
+        "https://*.smartrecruiters.com/*",
+        "https://*.icims.com/*",
+        "https://*.jobvite.com/*",
+        "https://*.bamboohr.com/*",
+        "https://*.breezy.hr/*",
+        "https://*.recruitee.com/*",
+        "https://*.teamtailor.com/*",
+        "https://*.taleo.net/*",
+        "https://*.successfactors.com/*"
+      ],
+      "js": [
+        "src/lib/util.js",
+        "src/lib/rules.js",
+        "src/lib/fields.js",
+        "src/content/content.js"
+      ],
+      "css": ["src/content/overlay.css"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+/* Styles that must live in the page document (the panel itself is in a shadow
+ * root and carries its own CSS). */
+#ra-host {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 2147483647;
+}
+
+#ra-launcher {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  z-index: 2147483646;
+  font: 600 13px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #fff;
+  background: #1a63d8;
+  border: none;
+  border-radius: 999px;
+  padding: 11px 16px;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+}
+
+#ra-launcher:hover {
+  background: #1552b6;
+}
+
+.ra-highlight {
+  outline: 3px solid #f0a202 !important;
+  outline-offset: 2px !important;
+  transition: outline-color 0.2s ease;
+}

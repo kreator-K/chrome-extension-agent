@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+  <body>
+    <form>
+      <label for="fn">First Name</label>
+      <input id="fn" name="first_name" type="text" />
+
+      <label for="em">Email address</label>
+      <input id="em" name="email" type="email" />
+
+      <div>
+        <span id="lbl-auth">Are you legally authorized to work in the United States?</span>
+        <select id="auth" aria-labelledby="lbl-auth">
+          <option value="">Select an option</option>
+          <option value="y">Yes</option>
+          <option value="n">No</option>
+        </select>
+      </div>
+
+      <fieldset>
+        <legend>Will you now or in the future require sponsorship?</legend>
+        <label><input type="radio" name="sponsor" value="yes" /> Yes</label>
+        <label><input type="radio" name="sponsor" value="no" /> No</label>
+      </fieldset>
+
+      <label for="why">Why do you want to work here?</label>
+      <textarea id="why" name="why" maxlength="300"></textarea>
+
+      <label for="yrs">How many years of experience do you have with Python?</label>
+      <input id="yrs" name="python_years" type="number" />
+
+      <label><input type="checkbox" id="tos" name="tos" /> I certify the information is accurate</label>
+
+      <input type="hidden" name="csrf" value="x" />
+      <input type="search" name="search" placeholder="Search jobs" />
+      <button type="submit">Submit</button>
+    </form>
+  </body>
+</html>

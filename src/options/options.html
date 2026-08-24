@@ -1,0 +1,110 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Resume Autofill — Knowledge base &amp; settings</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <div class="page">
+      <h1>Resume Autofill</h1>
+      <p class="lead">
+        Everything below is stored locally in this browser profile. The resume text and
+        your API key are sent only to the Anthropic API, and only when you ask for an
+        AI answer on a form.
+      </p>
+
+      <section>
+        <h2>1. Resume knowledge base</h2>
+        <div class="row">
+          <input type="file" id="resumeFile" accept=".txt,.md,.json,.pdf" />
+          <span id="resumeMeta" class="hint"></span>
+        </div>
+        <p class="hint">
+          Upload a <code>.txt</code>, <code>.md</code> or <code>.pdf</code> resume, or paste
+          the text directly. Anything you would want to draw on when answering — projects,
+          metrics, stories, preferred phrasing — belongs here, not just the one-page resume.
+        </p>
+        <textarea id="resumeText" rows="16" placeholder="Paste your full resume and supporting notes here…"></textarea>
+        <div class="row">
+          <button id="saveResume" class="primary">Save knowledge base</button>
+          <span id="resumeStatus" class="hint"></span>
+        </div>
+      </section>
+
+      <section>
+        <h2>2. Profile</h2>
+        <p class="hint">
+          These answer the mechanical questions with no model call at all — free, instant
+          and deterministic.
+        </p>
+        <div id="profileGrid" class="grid"></div>
+
+        <h3>Skills and years</h3>
+        <p class="hint">Used for "How many years of experience do you have with X?".</p>
+        <div id="skills"></div>
+        <button id="addSkill">Add skill</button>
+
+        <div class="row">
+          <button id="saveProfile" class="primary">Save profile</button>
+          <span id="profileStatus" class="hint"></span>
+        </div>
+      </section>
+
+      <section>
+        <h2>3. Anthropic API</h2>
+        <div class="grid">
+          <label>API key
+            <input type="password" id="apiKey" placeholder="sk-ant-…" autocomplete="off" />
+          </label>
+          <label>Model
+            <select id="model">
+              <option value="claude-opus-5">Claude Opus 5 (recommended)</option>
+              <option value="claude-sonnet-5">Claude Sonnet 5 (cheaper)</option>
+              <option value="claude-haiku-4-5">Claude Haiku 4.5 (fastest)</option>
+            </select>
+          </label>
+          <label>Effort
+            <select id="effort">
+              <option value="low">low</option>
+              <option value="medium">medium</option>
+              <option value="high">high</option>
+            </select>
+          </label>
+          <label>Max questions per AI call
+            <input type="number" id="maxAiQuestions" min="1" max="60" />
+          </label>
+          <label class="wide">Answer style
+            <input type="text" id="tone" />
+          </label>
+          <label class="check"><input type="checkbox" id="autoScan" /> Show the launcher button on pages with a form</label>
+        </div>
+        <div class="row">
+          <button id="saveSettings" class="primary">Save settings</button>
+          <button id="testKey">Test key</button>
+          <span id="settingsStatus" class="hint"></span>
+        </div>
+      </section>
+
+      <section>
+        <h2>4. Answer bank</h2>
+        <p class="hint">
+          Answers you save from the on-page panel. They are reused verbatim when the same
+          question shows up again, ahead of any model call.
+        </p>
+        <div id="bank"></div>
+        <div class="row">
+          <button id="exportAll">Export everything (JSON)</button>
+          <input type="file" id="importFile" accept=".json" hidden />
+          <button id="importAll">Import…</button>
+          <button id="clearBank" class="danger">Clear answer bank</button>
+          <span id="bankStatus" class="hint"></span>
+        </div>
+      </section>
+    </div>
+
+    <script src="../lib/util.js"></script>
+    <script src="pdf.js"></script>
+    <script src="options.js"></script>
+  </body>
+</html>

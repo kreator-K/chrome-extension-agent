@@ -1,0 +1,25 @@
+body {
+  width: 280px;
+  margin: 0;
+  padding: 12px;
+  font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #16181d;
+}
+h1 { font-size: 14px; margin: 0 0 8px; }
+.status { list-style: none; margin: 0 0 10px; padding: 0; }
+.status li { display: flex; gap: 6px; padding: 2px 0; color: #4a4f57; }
+.status li.bad { color: #b3261e; }
+.actions { display: flex; flex-direction: column; gap: 6px; }
+button {
+  font: inherit;
+  padding: 7px 9px;
+  border: 1px solid #c8ccd2;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+button:hover { background: #f1f3f5; }
+button.primary { background: #1a63d8; border-color: #1a63d8; color: #fff; }
+button.primary:hover { background: #1552b6; }
+.msg { font-size: 12px; color: #4a4f57; min-height: 16px; margin: 8px 0 0; }
+.msg.err { color: #b3261e; }
