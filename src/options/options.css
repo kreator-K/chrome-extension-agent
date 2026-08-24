@@ -48,6 +48,8 @@ button.danger { color: #b3261e; border-color: #e0b4b0; }
 .skill { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
 .skill input[name="name"] { flex: 2; }
 .skill input[name="years"] { width: 90px; flex: none; }
+.checklist { margin: 0; padding-left: 20px; font-size: 13px; color: #33363c; }
+.checklist li { margin-bottom: 6px; }
 .bank-item { border-top: 1px solid #eceef1; padding: 8px 0; }
 .bank-item .q { font-weight: 600; font-size: 13px; }
 .bank-item .a { color: #4a4f57; font-size: 13px; white-space: pre-wrap; }

@@ -1,6 +1,6 @@
 /* Service worker: owns the Anthropic API key and every network call.
  * Content scripts never see the key and never talk to api.anthropic.com. */
-importScripts('../lib/util.js', '../lib/rules.js');
+importScripts('../lib/util.js', '../lib/rules.js', '../lib/keywords.js');
 
 const RA = self.RA;
 const API_URL = 'https://api.anthropic.com/v1/messages';
@@ -23,6 +23,29 @@ const ANSWER_SCHEMA = {
     }
   },
   required: ['answers'],
+  additionalProperties: false
+};
+
+const MATCH_SCHEMA = {
+  type: 'object',
+  properties: {
+    summary: { type: 'string', description: '2-3 sentences on overall fit and the biggest gaps.' },
+    keywordSuggestions: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          keyword: { type: 'string' },
+          inResume: { type: 'boolean', description: 'True only if the resume already demonstrates this, just not in this exact wording.' },
+          suggestion: { type: 'string', description: 'One concrete instruction: either how to reword an existing bullet to surface this keyword, or "Not supported by the resume — do not add unless true" if it is not.' },
+          section: { type: 'string', description: 'Where it would naturally fit: Skills, a specific role, Summary, etc.' }
+        },
+        required: ['keyword', 'inResume', 'suggestion', 'section'],
+        additionalProperties: false
+      }
+    }
+  },
+  required: ['summary', 'keywordSuggestions'],
   additionalProperties: false
 };
 
@@ -186,6 +209,77 @@ async function generateAnswers({ questions, pageContext }) {
   });
 }
 
+/**
+ * Local score plus an AI pass over the specific missing keywords, telling the
+ * candidate where each one could honestly fit (or that it doesn't, rather
+ * than inventing experience to close the gap).
+ */
+async function analyzeMatch({ jobDescription, jobTitle, company }) {
+  if (!jobDescription || jobDescription.trim().length < 40) {
+    throw new Error('No job description could be read from this page. Paste it in the panel to score against it.');
+  }
+
+  const settings = await RA.storage.getSettings();
+  const profile = await RA.storage.getProfile();
+  const resume = await RA.storage.getResume();
+  if (!resume.text) throw new Error('No resume knowledge base uploaded yet.');
+
+  const local = RA.matchScore(jobDescription, resume.text, profile);
+  if (!settings.apiKey || !local.missing.length) {
+    return { local, ai: null };
+  }
+
+  const resumeExcerpt = RA.retrieve(resume.text, local.missing.join(' '), 10000);
+  const body = {
+    model: settings.model || 'claude-opus-5',
+    max_tokens: 8000,
+    thinking: { type: 'adaptive' },
+    output_config: {
+      effort: settings.effort || 'medium',
+      format: { type: 'json_schema', schema: MATCH_SCHEMA }
+    },
+    fallbacks: 'default',
+    system: [
+      'You help a candidate see why an ATS keyword-matching score is not higher, and what to honestly do about it.',
+      'You are given a job description, the keywords it identified as missing from the resume, the resume text, and the candidate profile.',
+      '',
+      'For every missing keyword:',
+      '- If the resume already shows equivalent experience under different words (e.g. resume says "Postgres", JD wants "SQL databases"), set inResume: true and say exactly how to reword the existing bullet to include the JD\'s term.',
+      '- If the resume does not support it at all, set inResume: false and say so plainly — never invent a project, tool, or skill the candidate has not demonstrated. Do not suggest adding a keyword the resume cannot back up.',
+      '- Never suggest keyword stuffing (dumping unrelated terms into a skills list just to match). Every suggestion must point to a specific, truthful place it belongs.',
+      '',
+      '=== CANDIDATE PROFILE ===',
+      profileSummary(profile),
+      '',
+      '=== RESUME (relevant excerpt) ===',
+      resumeExcerpt
+    ].join('\n'),
+    messages: [
+      {
+        role: 'user',
+        content:
+          `Job: ${jobTitle || 'unknown title'}${company ? ' at ' + company : ''}\n\n` +
+          `Job description:\n${RA.truncate(jobDescription, 6000)}\n\n` +
+          `Keywords the local scan flagged as missing, most important first:\n${local.missing.join(', ')}\n\n` +
+          'For each of these keywords, tell me whether my resume already supports it and how to reword it in, or whether it is a genuine gap.'
+      }
+    ]
+  };
+
+  const msg = await callClaude(settings, body);
+  if (msg.stop_reason === 'refusal') {
+    return { local, ai: null, aiError: 'The model declined this request.' };
+  }
+  const textBlock = (msg.content || []).find((b) => b.type === 'text');
+  let ai = null;
+  try {
+    ai = textBlock ? JSON.parse(textBlock.text) : null;
+  } catch (e) {
+    ai = null;
+  }
+  return { local, ai };
+}
+
 async function testApiKey(apiKey) {
   const settings = await RA.storage.getSettings();
   const res = await callClaude(
@@ -206,6 +300,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       switch (msg && msg.type) {
         case 'GENERATE_ANSWERS':
           sendResponse({ ok: true, answers: await generateAnswers(msg.payload || {}) });
+          break;
+        case 'ANALYZE_MATCH':
+          sendResponse(Object.assign({ ok: true }, await analyzeMatch(msg.payload || {})));
           break;
         case 'SAVE_ANSWER':
           await RA.storage.saveAnswer(msg.question, msg.answer);

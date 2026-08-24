@@ -36,6 +36,7 @@
         "src/lib/util.js",
         "src/lib/rules.js",
         "src/lib/fields.js",
+        "src/lib/keywords.js",
         "src/content/content.js"
       ],
       "css": ["src/content/overlay.css"],

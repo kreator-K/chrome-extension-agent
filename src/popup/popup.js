@@ -2,6 +2,7 @@ const CONTENT_FILES = [
   'src/lib/util.js',
   'src/lib/rules.js',
   'src/lib/fields.js',
+  'src/lib/keywords.js',
   'src/content/content.js'
 ];
 

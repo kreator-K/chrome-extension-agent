@@ -29,6 +29,29 @@ the one above it has nothing:
 Demographic, salary-history and criminal-record questions are never sent to the
 model — they come from your profile defaults or are left for you.
 
+## Resume match score
+
+The panel also scores your resume against the job description on the page —
+fully offline, no API key or network call needed:
+
+- **Score (0–100)** — 70% keyword coverage, 15% title match, 15% experience-years match.
+- **Matched keywords** — what your resume already has, pulled from a skills/tools
+  dictionary plus role-specific phrases lifted from the posting itself
+  ("payments platform", "distributed systems").
+- **Recommended keywords to add** — what's missing, ranked by importance. Ones
+  the posting calls out under "Requirements" or "Qualifications" are marked in
+  red — an ATS keyword-matcher weights those far more than the rest of the text.
+- **Explain gaps with AI** (optional, needs your API key) — for each missing
+  keyword, Claude checks whether your resume already demonstrates it under
+  different wording and tells you exactly how to reword an existing bullet to
+  surface it — or says plainly that it's a genuine gap. It will not suggest
+  adding a skill your resume doesn't support; keyword-stuffing a skills list
+  with things you haven't done just gets you screened out at the interview
+  instead of the ATS.
+
+If the page's job description isn't auto-detected, paste it into the panel and
+press **Score against this**.
+
 ## Install
 
 1. Clone this repo.
@@ -70,7 +93,8 @@ Submit.
 - Resume text, profile, answer bank and API key live in `chrome.storage.local`
   in your browser profile. Nothing syncs anywhere.
 - The only network destination is `api.anthropic.com`, and only when you press
-  **Answer remaining with AI**. Tiers 1 and 2 are fully offline.
+  **Answer remaining with AI** or **Explain gaps with AI**. Tiers 1 and 2 of
+  answering, and the base resume match score, are fully offline.
 - The API key stays in the service worker; content scripts never see it.
 - **Export everything (JSON)** omits the API key by design.
 
@@ -87,19 +111,22 @@ manifest.json
 src/lib/util.js          storage, text normalisation, fuzzy match, retrieval
 src/lib/rules.js         deterministic profile-driven answers
 src/lib/fields.js        form scanning, label extraction, framework-safe filling
+src/lib/keywords.js      offline resume/JD match scoring and keyword extraction
 src/content/content.js   in-page orchestration and the review panel
 src/background/          Anthropic API calls; the only place the key is used
-src/options/             knowledge base, profile, settings, answer bank, PDF text
+src/options/             knowledge base, profile, settings, answer bank, PDF text, ATS checklist
 src/popup/               status and manual trigger
 ```
 
 ## Tests
 
 ```
-npm test            # all three
-npm run test:logic  # rules, matching and retrieval, in Node
-npm run test:dom    # scan + fill against a fixture form in real Chromium
-npm run test:load   # loads the unpacked extension and pokes the service worker
+npm test              # all five
+npm run test:logic    # rules, matching and retrieval, in Node
+npm run test:keywords # ATS/match scoring against fixture job descriptions, in Node
+npm run test:dom      # scan + fill against a fixture form in real Chromium
+npm run test:panel    # match-score panel rendering against a fixture JD page
+npm run test:load     # loads the unpacked extension and pokes the service worker
 ```
 
 The DOM and load tests use Playwright's Chromium. If Playwright is installed
@@ -116,3 +143,10 @@ globally rather than in the project, run them with
   wrapping `<label>` → `aria-label` → nearest ancestor text → placeholder →
   field name. Odd markup can still produce a poor label; edit the answer in the
   panel before filling.
+- The match score is a keyword-overlap heuristic, the same approach real ATS
+  keyword-matchers use — not a guarantee of how any specific ATS will score
+  you. Treat it as a checklist, not a verdict.
+- The dictionary of skills/tools in `src/lib/keywords.js` is deliberately
+  broad but not exhaustive; role-specific multi-word phrases outside it are
+  still picked up from the posting's own text, just with less precision than a
+  dictionary hit.

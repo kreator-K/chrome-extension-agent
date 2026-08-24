@@ -6,7 +6,10 @@
   window.__resumeAutofillLoaded = true;
 
   const RA = window.RA;
-  let state = { fields: [], answers: new Map(), panel: null, shadow: null, busy: false };
+  let state = {
+    fields: [], answers: new Map(), panel: null, shadow: null, busy: false,
+    match: null, matchAi: null, matchBusy: false, jdOverride: ''
+  };
 
   /* --------------------------------------------------------- page context */
 
@@ -14,6 +17,19 @@
     for (const sel of selectors) {
       const el = document.querySelector(sel);
       const t = el && (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (t) return t.slice(0, max || 200);
+    }
+    return '';
+  }
+
+  /** Like pickText, but keeps line breaks — the keyword scorer relies on them
+   * to tell a "Requirements" header from the paragraph under it. */
+  function pickBlockText(selectors, max) {
+    for (const sel of selectors) {
+      const el = document.querySelector(sel);
+      const raw = el && (el.innerText || el.textContent || '');
+      if (!raw) continue;
+      const t = raw.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
       if (t) return t.slice(0, max || 200);
     }
     return '';
@@ -38,7 +54,7 @@
         '.company-name',
         '.main-header-content h1'
       ], 120),
-      jobDescription: pickText([
+      jobDescription: pickBlockText([
         '.jobs-description__content',
         '.description__text',
         '#content .section-wrapper',
@@ -131,6 +147,24 @@
   .status { padding: 8px 12px; font-size: 12px; color: #4a4f57; border-top: 1px solid #e3e6ea; background: #fafbfc; }
   .err { color: #b3261e; }
   .empty { padding: 16px; color: #6b7079; text-align: center; }
+  .match { padding: 10px 12px; border-bottom: 1px solid #e3e6ea; background: #fbfbfc; }
+  .match-top { display: flex; align-items: center; gap: 10px; }
+  .score-circle { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px; flex: none; color: #fff; }
+  .score-circle.good { background: #1f7a4a; }
+  .score-circle.mid { background: #c9861b; }
+  .score-circle.low { background: #b3261e; }
+  .match-summary { flex: 1; font-size: 12px; }
+  .match-summary .label { font-weight: 600; margin-bottom: 2px; }
+  .match-bars { display: flex; gap: 10px; margin-top: 6px; font-size: 11px; color: #6b7079; }
+  .kw-title { font-size: 11px; font-weight: 600; color: #4a4f57; margin: 8px 0 4px; text-transform: uppercase; letter-spacing: .03em; }
+  .kw-list { display: flex; flex-wrap: wrap; gap: 5px; }
+  .kw-chip { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid #d6d9de; background: #fff; color: #4a4f57; }
+  .kw-chip.supported { border-color: #2f9e63; color: #1f7a4a; }
+  .kw-chip.gap { border-color: #c9a227; color: #8a6d0b; }
+  .kw-chip.gap.required { border-color: #b3261e; color: #b3261e; background: #fdf0ef; font-weight: 600; }
+  .kw-note { font-size: 11.5px; color: #4a4f57; margin-top: 3px; padding-left: 2px; border-left: 2px solid #e3e6ea; padding-left: 6px; }
+  .match textarea.jd-paste { margin-top: 6px; min-height: 50px; }
   `;
 
   function ensurePanel() {
@@ -149,6 +183,7 @@
         <button data-act="rescan">Rescan</button>
         <button data-act="close" title="Close">✕</button>
       </header>
+      <div class="match"></div>
       <div class="body"></div>
       <div class="status"></div>
       <div style="display:flex;gap:6px;padding:8px 10px;border-top:1px solid #e3e6ea">
@@ -221,6 +256,65 @@
     return itemEl.querySelector('textarea').value;
   }
 
+  function scoreClass(score) {
+    return score >= 75 ? 'good' : score >= 50 ? 'mid' : 'low';
+  }
+
+  function renderMatch() {
+    const shadow = ensurePanel();
+    const host = shadow.querySelector('.match');
+    const m = state.match;
+
+    if (!m) {
+      host.innerHTML = `
+        <div class="hint" style="font-size:12px;color:#6b7079;margin-bottom:6px;">
+          No job description detected on this page. Paste it to get a match score.
+        </div>
+        <textarea class="jd-paste" placeholder="Paste the job description…"></textarea>
+        <div class="row"><button data-act="usejd">Score against this</button></div>`;
+      return;
+    }
+
+    const { score, breakdown, matched, missing, missingRequired } = m;
+    const requiredSet = new Set((missingRequired || []).map((k) => k.toLowerCase()));
+    const kwChips = (list, cls) => list.map((k) => {
+      const extraCls = cls === 'gap' && requiredSet.has(k.toLowerCase()) ? ' required' : '';
+      return `<span class="kw-chip ${cls}${extraCls}" title="${extraCls ? 'Called out in the requirements/qualifications section' : ''}">${escapeHtml(k)}</span>`;
+    }).join('');
+    const aiBlock = state.matchAi
+      ? `<div class="kw-title">What to do about it</div>` +
+        `<div class="kw-note" style="border:none;padding-left:0;margin-bottom:6px;">${escapeHtml(state.matchAi.summary || '')}</div>` +
+        state.matchAi.keywordSuggestions.map((s) => `
+          <div class="kw-note">
+            <strong>${escapeHtml(s.keyword)}</strong> — ${s.inResume ? `add to <em>${escapeHtml(s.section)}</em>: ` : ''}${escapeHtml(s.suggestion)}
+          </div>`).join('')
+      : '';
+
+    host.innerHTML = `
+      <div class="match-top">
+        <div class="score-circle ${scoreClass(score)}">${score}</div>
+        <div class="match-summary">
+          <div class="label">Resume match score</div>
+          <div class="match-bars">
+            <span>Keywords ${breakdown.keywordsFound}/${breakdown.keywordsTotal}</span>
+            <span>Title ${breakdown.titleMatch}%</span>
+            <span>Experience ${breakdown.experienceMatch}%</span>
+          </div>
+        </div>
+      </div>
+      ${matched.length ? `<div class="kw-title">Matched keywords</div><div class="kw-list">${kwChips(matched.slice(0, 12), 'supported')}</div>` : ''}
+      ${missing.length ? `<div class="kw-title">Recommended keywords to add ${missingRequired && missingRequired.length ? '(red = called out as required)' : ''}</div><div class="kw-list">${kwChips(missing.slice(0, 15), 'gap')}</div>` : '<div class="kw-title">No significant keyword gaps found</div>'}
+      ${aiBlock}
+      <div class="row">
+        ${missing.length ? '<button data-act="matchai">Explain gaps with AI</button>' : ''}
+        <button data-act="pastejd">Use a different job description</button>
+      </div>`;
+  }
+
+  function escapeHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
   async function onPanelClick(ev) {
     const btn = ev.target.closest('button');
     if (!btn) return;
@@ -230,6 +324,20 @@
     if (act === 'close') { state.panel.remove(); state.panel = null; return; }
     if (act === 'rescan') { await scan(); return; }
     if (act === 'ai') { await runAi(); return; }
+    if (act === 'usejd') {
+      const text = state.shadow.querySelector('.jd-paste').value.trim();
+      if (!text) return;
+      state.jdOverride = text;
+      await computeMatch();
+      return;
+    }
+    if (act === 'pastejd') {
+      state.match = null;
+      state.matchAi = null;
+      renderMatch();
+      return;
+    }
+    if (act === 'matchai') { await runMatchAi(); return; }
     if (act === 'fillall') {
       let filled = 0; let failed = 0;
       state.shadow.querySelectorAll('.item').forEach((el) => {
@@ -261,6 +369,40 @@
 
   /* ------------------------------------------------------------- workflow */
 
+  async function computeMatch() {
+    const [profile, resume] = await Promise.all([RA.storage.getProfile(), RA.storage.getResume()]);
+    const jd = state.jdOverride || pageContext().jobDescription;
+    if (!resume.text || !jd || jd.trim().length < 40) {
+      state.match = null;
+    } else {
+      state.match = RA.matchScore(jd, resume.text, profile);
+      state.matchAi = null;
+    }
+    renderMatch();
+  }
+
+  async function runMatchAi() {
+    if (state.matchBusy || !state.match) return;
+    state.matchBusy = true;
+    const btn = state.shadow.querySelector('[data-act="matchai"]');
+    if (btn) { btn.disabled = true; btn.textContent = 'Asking Claude…'; }
+    const ctx = pageContext();
+    chrome.runtime.sendMessage(
+      {
+        type: 'ANALYZE_MATCH',
+        payload: { jobDescription: state.jdOverride || ctx.jobDescription, jobTitle: ctx.jobTitle, company: ctx.company }
+      },
+      (res) => {
+        state.matchBusy = false;
+        if (!res || !res.ok) { setStatus((res && res.error) || 'Could not analyze the match.', true); renderMatch(); return; }
+        if (res.local) state.match = res.local;
+        state.matchAi = res.ai;
+        if (!res.ai) setStatus(res.aiError || 'No AI suggestions available — check your API key in settings.', !!res.aiError);
+        renderMatch();
+      }
+    );
+  }
+
   async function scan() {
     ensurePanel();
     setStatus('Scanning page…');
@@ -268,6 +410,7 @@
     const { resolved } = await resolveLocally(state.fields);
     state.answers = resolved;
     render();
+    await computeMatch();
     const known = Array.from(resolved.values()).filter((a) => a.value).length;
     setStatus(`${state.fields.length} question${state.fields.length === 1 ? '' : 's'} found · ${known} answered from your profile and saved answers.`);
     return state.fields.length;
