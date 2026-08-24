@@ -71,7 +71,8 @@ press **Score against this**.
      knowledge base. Existing edits are never overwritten; use **Fill from
      resume & knowledge base** to rescan on demand. Recognized skill names are
      merged from both documents; their year fields remain blank unless a source
-     explicitly states a duration.
+     explicitly states a duration. **Reset profile** clears stored profile
+     values so the next rescan starts clean without deleting either document.
    - **API key** — an [Anthropic API key](https://console.anthropic.com/).
      Press **Test key** to check it.
 

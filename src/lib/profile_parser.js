@@ -48,7 +48,7 @@
   function plausibleName(line) {
     const value = cleanScalar(line);
     if (!value || value.length > 60 || /[@/:|\d]/.test(value)) return '';
-    if (/\b(resume|résumé|curriculum vitae|knowledge|candidate|contact|identity|profile|summary|experience|education|skills|work|preferences|projects|certifications|awards|engineer|manager|developer|analyst|scientist|university|college|school|institute)\b/i.test(value)) return '';
+    if (/\b(resume|résumé|curriculum vitae|knowledge|candidate|contact|identity|profile|summary|experience|education|skills|work|preferences|projects|certifications|awards|engineer|manager|developer|analyst|scientist|university|college|school|institute|how to use)\b/i.test(value)) return '';
     const words = value.split(/\s+/);
     if (words.length < 2 || words.length > 5 || words.some((w) => !/^[A-Za-zÀ-ÖØ-öø-ÿ'’.-]+$/.test(w))) return '';
     return value;
@@ -81,6 +81,7 @@
   function cleanSchool(value) {
     value = cleanScalar(value)
       .replace(/^(?:school|university|college|institution)\s*:?\s*/i, '')
+      .replace(/\s+[—-]\s+(?:MBA|M\.?B\.?A\.?|M(?:aster)?\.?S\.?|B(?:achelor)?\.?\s*(?:Tech|Science|Arts)?).*$/i, '')
       .replace(/\s*,?\s*(?:19|20)\d{2}.*$/, '')
       .trim();
     const part = value.split(/\s*[|;·]\s*/).find((item) =>
@@ -145,6 +146,11 @@
 
     const fullName = labelled(lines, 'full\\s+name|legal\\s+name|preferred\\s+name|candidate(?:\\s+name)?|name');
     if (fullName) putFullName(out, fullName);
+    if (!out.firstName || !out.lastName) {
+      const kbTitleName = firstMatch(text, /^\s*Resume Knowledge Base\s*[—-]\s*([^\r\n]+)/im, 1);
+      const pdfHeaderName = firstMatch(text, /^\s*([A-Z][A-Z'’-]+(?:\s+[A-Z][A-Z'’-]+){1,3})\s+(?=[A-Z][A-Za-z .'-]+,\s*[A-Z]{2}\b)/m, 1);
+      putFullName(out, kbTitleName || pdfHeaderName);
+    }
     const labelledFirst = labelled(lines, 'first\\s+name|given\\s+name');
     const labelledLast = labelled(lines, 'last\\s+name|family\\s+name|surname');
     if (labelledFirst && namePart(labelledFirst)) out.firstName = namePart(labelledFirst);
@@ -180,6 +186,10 @@
     const labelledLocation = labelled(lines, 'location|based\\s+in|city(?:\\s*[\\/&,]\\s*state)?');
     if (labelledLocation) putLocation(out, labelledLocation);
     if (!out.city) {
+      const headerLocation = firstMatch(text, /^\s*[A-Z][A-Z'’-]+(?:\s+[A-Z][A-Z'’-]+){1,3}\s+([A-Z][A-Za-z .'-]+,\s*[A-Z]{2}(?:\s+\d{5})?)/m, 1);
+      if (headerLocation) putLocation(out, headerLocation);
+    }
+    if (!out.city) {
       const locationLine = topLines.find((line) => /^[A-Za-z .'-]+,\s*[A-Za-z .'-]{2,40}(?:\s+\d{4,10}(?:-\d{4})?)?(?:,\s*[A-Za-z .'-]+)?$/.test(line));
       if (locationLine) putLocation(out, locationLine);
     }
@@ -205,13 +215,14 @@
     for (const [re, label] of degreePatterns) {
       if (re.test(labelledDegree || text)) { out.degreeLevel = label; break; }
     }
-    const degreeLine = lines.find((line) => /\b(?:Ph\.?D\.?|Doctor|M\.?S\.?|M\.?A\.?|MBA|Master|B\.?S\.?|B\.?A\.?|Bachelor|Associate)\b/i.test(line));
+    const degreeLine = lines.find((line) => line.length < 180 && /\b(?:Ph\.?D\.?|Doctor(?:ate| of)|M\.?S\.?|M\.?A\.?|MBA|Master(?:'s| of)|B\.?S\.?|B\.?A\.?|Bachelor(?:'s| of)|Associate(?:'s| degree))\b/i.test(line));
     const labelledMajor = labelled(lines, 'major(?:\\s*\\/\\s*field\\s+of\\s+study)?|field\\s+of\\s+study|concentration|specialization');
     if (labelledMajor) out.major = labelledMajor;
     if (degreeLine && !out.major) {
       const major = firstMatch(degreeLine, /\b(?:in|of)\s+([A-Za-z][A-Za-z &/-]{2,60}?)(?=\s*[|,;·]|\s+(?:19|20)\d{2}\b|$)/i, 1);
       if (major && !/philosophy$/i.test(major)) out.major = major;
     }
+    if (!out.major && /\b(?:MBA|Master of Business Administration)\b/i.test(text)) out.major = 'Business Administration';
     const labelledSchool = labelled(lines, 'school|university|college|institution');
     if (labelledSchool && /[A-Za-z]/.test(labelledSchool)) out.school = cleanSchool(labelledSchool);
     if (!out.school) {
@@ -219,13 +230,18 @@
       if (schoolLine) out.school = cleanSchool(schoolLine);
     }
     const labelledGradYear = labelled(lines, 'graduation\\s+year|graduated|class\\s+of');
-    const gradYear = firstMatch(labelledGradYear || text, /\b(19\d{2}|20\d{2})\b/, 1);
+    const gradYear = firstMatch(labelledGradYear || degreeLine || text, /\b(19\d{2}|20\d{2})\b/, 1);
     if (gradYear) out.gradYear = gradYear;
 
     const labelledTitle = labelled(lines, 'current\\s+(?:job\\s+)?title|job\\s+title|current\\s+role|role');
     const labelledCompany = labelled(lines, 'current\\s+(?:employer|company)|employer|company');
     if (labelledTitle) out.currentTitle = labelledTitle;
     if (labelledCompany) out.currentCompany = labelledCompany;
+    const numberedRole = rawLines.map((line) => plainLine(line).match(/^\d+\.\d+\s+(.{2,80}?)\s+[—-]\s+(.{2,80})$/)).find(Boolean);
+    if (numberedRole) {
+      if (!out.currentCompany) out.currentCompany = cleanScalar(numberedRole[1]);
+      if (!out.currentTitle) out.currentTitle = cleanScalar(numberedRole[2]);
+    }
     const titleWords = /\b(?:engineer|manager|director|developer|analyst|scientist|architect|consultant|designer|specialist|administrator|coordinator|researcher|product lead|team lead|founder|president|officer)\b/i;
     if (!out.currentTitle) {
       const atRole = lines.map((line) => line.match(/^([^|]{3,80}?)\s+at\s+([^|]{2,80})$/i)).find(Boolean);
@@ -247,6 +263,8 @@
         }
       }
     }
+    if (out.currentTitle && out.currentTitle.length > 100) delete out.currentTitle;
+    if (out.currentCompany && out.currentCompany.length > 100) delete out.currentCompany;
 
     if (/\b(?:authorized|eligible) to work in (?:the )?(?:united states|u\.?s\.?)\b/i.test(text)) out.workAuthorized = 'yes';
     if (/\b(?:(?:do not|don't|does not) require (?:visa )?sponsorship|without (?:the need for )?(?:visa )?sponsorship)\b/i.test(text)) out.requiresSponsorship = 'no';
@@ -299,7 +317,9 @@
         continue;
       }
       const existingValue = String(merged[key] || '').trim();
-      const formattingPolluted = /^[-*+]\s+/.test(existingValue) || /\*\*|__|~~|`/.test(existingValue);
+      const formattingPolluted = /^[-*+]\s+/.test(existingValue) || /\*\*|__|~~|`/.test(existingValue) ||
+        ((key === 'firstName' || key === 'lastName') && /how to use|this file/i.test(existingValue)) ||
+        (key === 'school' && /\b(?:MBA|Master|Bachelor|B\.?Tech)\b.*(?:19|20)\d{2}/i.test(existingValue));
       if (value !== '' && value != null && (!existingValue || formattingPolluted)) {
         merged[key] = value;
         changed.push(key);

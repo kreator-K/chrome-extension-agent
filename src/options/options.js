@@ -309,6 +309,13 @@ $('extractProfile').addEventListener('click', async () => {
   );
 });
 
+$('resetProfile').addEventListener('click', async () => {
+  const profile = Object.assign({}, RA.DEFAULT_PROFILE, { skills: [] });
+  await RA.storage.set({ profile });
+  await loadProfile();
+  status($('profileStatus'), 'Profile reset. Use Fill from resume & knowledge base for a clean rescan.', 'ok');
+});
+
 /* ------------------------------------------------------------------- settings */
 
 async function loadSettings() {

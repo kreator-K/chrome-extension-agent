@@ -125,6 +125,14 @@ Technical: Python, SQL, LLM applications (RAG, vector retrieval)`;
     assert.strictEqual(importedSkills.find((skill) => skill.name === 'Python').years, '6');
     assert.strictEqual(importedSkills.find((skill) => skill.name === 'SQL').years, '', 'unstated years remain blank in the UI');
 
+    await options.click('#resetProfile');
+    assert.strictEqual(await options.inputValue('#p_firstName'), '', 'profile reset clears extracted scalar fields');
+    assert.strictEqual(await options.locator('#skills [name=name]').count(), 1, 'profile reset restores one empty skill row');
+    assert.strictEqual(await options.inputValue('#skills [name=name]'), '');
+    await options.click('#extractProfile');
+    await options.waitForFunction(() => document.getElementById('p_firstName').value === 'Alex');
+    assert.ok(await options.locator('#skills [name=name]').evaluateAll((inputs) => inputs.some((input) => input.value === 'Amplitude')), 'clean rescan restores merged skills');
+
     // Re-running extraction must still fill blanks left by a previous partial pass.
     await options.evaluate(() => new Promise((resolve) => {
       chrome.storage.local.get(['profile', 'applicationResume'], ({ profile, applicationResume }) => {

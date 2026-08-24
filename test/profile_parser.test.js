@@ -127,4 +127,30 @@ const cleanedStoredFormatting = ctx.RA.mergeExtractedProfile(
 assert.strictEqual(cleanedStoredFormatting.profile.firstName, 'Manual', 'still preserves genuine manual values');
 assert.strictEqual(cleanedStoredFormatting.profile.school, 'Cornell SC Johnson College of Business', 'replaces stale Markdown-corrupted values');
 
+const plainTextKnowledgeBase = ctx.RA.extractProfile(`Resume Knowledge Base — Prashant Kumar
+======================================
+Last updated: 24 Aug 2026
+0. How to use this file
+-----------------------
+1. This is the source of truth for facts, not for phrasing.
+2.1 Hotelzify Pvt Ltd — Head of Product
+Bangalore, India · Aug 2024 – May 2026
+2.6 Education & other
+- Cornell SC Johnson College of Business and Cornell Tech — MBA (STEM Designated), May 2027, New York, NY
+- NITK Surathkal — B.Tech, 2019. [MAJOR — OPEN]`);
+assert.strictEqual(plainTextKnowledgeBase.firstName, 'Prashant');
+assert.strictEqual(plainTextKnowledgeBase.lastName, 'Kumar');
+assert.strictEqual(plainTextKnowledgeBase.currentTitle, 'Head of Product');
+assert.strictEqual(plainTextKnowledgeBase.currentCompany, 'Hotelzify Pvt Ltd');
+assert.strictEqual(plainTextKnowledgeBase.school, 'Cornell SC Johnson College of Business and Cornell Tech');
+assert.strictEqual(plainTextKnowledgeBase.major, 'Business Administration');
+assert.strictEqual(plainTextKnowledgeBase.gradYear, '2027', 'does not confuse the document update date with graduation');
+
+const oneLinePdfHeader = ctx.RA.extractProfile('PRASHANT KUMAR New York, NY | (646) 276-3647 | pk627@cornell.edu | LinkedIn | GitHub EDUCATION Cornell SC Johnson College of Business and Cornell Tech New York, NY Master of Business Administration (STEM Designated) May 2027 PROFESSIONAL EXPERIENCE');
+assert.strictEqual(oneLinePdfHeader.firstName, 'PRASHANT');
+assert.strictEqual(oneLinePdfHeader.lastName, 'KUMAR');
+assert.strictEqual(oneLinePdfHeader.city, 'New York');
+assert.strictEqual(oneLinePdfHeader.state, 'NY');
+assert.strictEqual(oneLinePdfHeader.email, 'pk627@cornell.edu');
+
 console.log('Profile extraction and non-destructive merge assertions passed');
