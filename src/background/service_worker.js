@@ -56,7 +56,6 @@ async function callClaude(settings, body) {
       'content-type': 'application/json',
       'x-api-key': settings.apiKey,
       'anthropic-version': '2023-06-01',
-      'anthropic-beta': 'server-side-fallback-2026-07-01',
       // Required for calls made directly from a browser/extension context.
       'anthropic-dangerous-direct-browser-access': 'true'
     },
@@ -69,7 +68,28 @@ async function callClaude(settings, body) {
     try { detail = JSON.parse(text).error.message; } catch (e) { /* keep raw */ }
     throw new Error(`Anthropic API ${res.status}: ${detail}`);
   }
-  return JSON.parse(text);
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    throw new Error('Anthropic returned an unreadable response.');
+  }
+}
+
+function parsedStructuredResponse(msg, label) {
+  if (msg.stop_reason === 'refusal') {
+    throw new Error('The model declined this request' +
+      (msg.stop_details && msg.stop_details.explanation ? `: ${msg.stop_details.explanation}` : '.'));
+  }
+  const textBlock = (msg.content || []).find((block) => block.type === 'text');
+  if (!textBlock || !String(textBlock.text || '').trim()) {
+    throw new Error(`Anthropic returned no ${label}.`);
+  }
+  try {
+    return JSON.parse(textBlock.text);
+  } catch (e) {
+    const suffix = msg.stop_reason === 'max_tokens' ? ' The response reached its token limit.' : '';
+    throw new Error(`Anthropic returned invalid structured ${label}.${suffix}`);
+  }
 }
 
 async function generateAnswers({ questions, pageContext }) {
@@ -91,15 +111,7 @@ async function generateAnswers({ questions, pageContext }) {
     .map((e) => `Q: ${e.question}\nA: ${RA.truncate(e.answer, 600)}`)
     .join('\n\n');
 
-  const body = {
-    model: settings.model || 'claude-opus-5',
-    max_tokens: 16000,
-    thinking: { type: 'adaptive' },
-    output_config: {
-      effort: settings.effort || 'medium',
-      format: { type: 'json_schema', schema: ANSWER_SCHEMA }
-    },
-    fallbacks: 'default',
+  const body = Object.assign(RA.claudeRequestConfig(settings, 16000, ANSWER_SCHEMA), {
     system: RA.buildAnswerSystemPrompt(settings, profile, resumeExcerpt, priorAnswers),
     messages: [
       {
@@ -114,24 +126,10 @@ async function generateAnswers({ questions, pageContext }) {
           `\n\nAnswer each of these form questions:\n\n${RA.buildQuestionBlock(limited)}`
       }
     ]
-  };
+  });
 
   const msg = await callClaude(settings, body);
-
-  if (msg.stop_reason === 'refusal') {
-    throw new Error('The model declined this request' +
-      (msg.stop_details && msg.stop_details.explanation ? `: ${msg.stop_details.explanation}` : '.'));
-  }
-
-  const textBlock = (msg.content || []).find((b) => b.type === 'text');
-  if (!textBlock) throw new Error('Empty response from the model.');
-
-  let parsed;
-  try {
-    parsed = JSON.parse(textBlock.text);
-  } catch (e) {
-    throw new Error('Could not parse the model response as JSON.');
-  }
+  const parsed = parsedStructuredResponse(msg, 'application answers');
 
   const byId = new Map((parsed.answers || []).map((a) => [a.id, a]));
   return limited.map((q) => {
@@ -168,16 +166,9 @@ async function analyzeMatch({ jobDescription, jobTitle, company, applicationFact
     return { local, ai: null };
   }
 
-  const resumeExcerpt = RA.retrieve(resume.text, local.missing.join(' '), 10000);
-  const body = {
-    model: settings.model || 'claude-opus-5',
-    max_tokens: 8000,
-    thinking: { type: 'adaptive' },
-    output_config: {
-      effort: settings.effort || 'medium',
-      format: { type: 'json_schema', schema: MATCH_SCHEMA }
-    },
-    fallbacks: 'default',
+  const evidenceText = [resume.text, applicationResume.text].filter(Boolean).join('\n\n');
+  const resumeExcerpt = RA.retrieve(evidenceText, local.missing.join(' '), 10000);
+  const body = Object.assign(RA.claudeRequestConfig(settings, 8000, MATCH_SCHEMA), {
     system: [
       'You help a candidate see why an ATS keyword-matching score is not higher, and what to honestly do about it.',
       'You are given a job description, the keywords it identified as missing from the resume, the resume text, and the candidate profile.',
@@ -207,34 +198,29 @@ async function analyzeMatch({ jobDescription, jobTitle, company, applicationFact
           'For each of these keywords, tell me whether my resume already supports it and how to reword it in, or whether it is a genuine gap.'
       }
     ]
-  };
+  });
 
   const msg = await callClaude(settings, body);
-  if (msg.stop_reason === 'refusal') {
-    return { local, ai: null, aiError: 'The model declined this request.' };
-  }
-  const textBlock = (msg.content || []).find((b) => b.type === 'text');
-  let ai = null;
-  try {
-    ai = textBlock ? JSON.parse(textBlock.text) : null;
-  } catch (e) {
-    ai = null;
+  const ai = parsedStructuredResponse(msg, 'gap analysis');
+  if (!ai || !Array.isArray(ai.keywordSuggestions)) {
+    throw new Error('Anthropic returned an incomplete gap analysis.');
   }
   return { local, ai };
 }
 
-async function testApiKey(apiKey) {
+async function testApiKey(apiKey, model) {
   const settings = await RA.storage.getSettings();
+  const selectedModel = model || settings.model || 'claude-opus-5';
   const res = await callClaude(
     Object.assign({}, settings, { apiKey }),
     {
-      model: settings.model || 'claude-opus-5',
+      model: selectedModel,
       max_tokens: 16,
       messages: [{ role: 'user', content: 'Reply with the single word: ok' }]
     }
   );
   const t = (res.content || []).find((b) => b.type === 'text');
-  return { ok: true, reply: t ? t.text.trim() : '' };
+  return { ok: true, reply: t ? t.text.trim() : '', model: selectedModel };
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -252,7 +238,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           sendResponse({ ok: true });
           break;
         case 'TEST_API_KEY':
-          sendResponse(await testApiKey(msg.apiKey));
+          sendResponse(await testApiKey(msg.apiKey, msg.model));
           break;
         case 'GET_STATE': {
           const [settings, profile, resume, applicationResume, bank] = await Promise.all([

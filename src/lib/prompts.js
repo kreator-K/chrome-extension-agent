@@ -35,6 +35,23 @@
 
   RA.profileSummary = profileSummary;
 
+  RA.claudeRequestConfig = function (settings, maxTokens, schema) {
+    settings = settings || {};
+    const model = settings.model || 'claude-opus-5';
+    const supportsAdaptiveThinking = !/haiku/i.test(model);
+    const outputConfig = {
+      format: { type: 'json_schema', schema }
+    };
+    if (supportsAdaptiveThinking) outputConfig.effort = settings.effort || 'medium';
+    const config = {
+      model,
+      max_tokens: maxTokens,
+      output_config: outputConfig
+    };
+    if (supportsAdaptiveThinking) config.thinking = { type: 'adaptive' };
+    return config;
+  };
+
   RA.buildAnswerSystemPrompt = function (settings, profile, resumeExcerpt, priorAnswers) {
     settings = settings || {};
     return [

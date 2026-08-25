@@ -346,9 +346,10 @@ $('testKey').addEventListener('click', () => {
   const key = $('apiKey').value.trim();
   if (!key) return status($('settingsStatus'), 'Enter a key first.', 'err');
   status($('settingsStatus'), 'Testing…');
-  chrome.runtime.sendMessage({ type: 'TEST_API_KEY', apiKey: key }, (res) => {
+  const model = $('model').value;
+  chrome.runtime.sendMessage({ type: 'TEST_API_KEY', apiKey: key, model }, (res) => {
     if (!res || !res.ok) status($('settingsStatus'), (res && res.error) || 'No response.', 'err');
-    else status($('settingsStatus'), 'Key works.', 'ok');
+    else status($('settingsStatus'), `Key works with ${res.model || model}.`, 'ok');
   });
 });
 

@@ -47,4 +47,18 @@ assert.match(block, /max characters: 3/);
 assert.match(block, /required: yes/);
 assert.match(block, /---\nid: q2/);
 
+const schema = { type: 'object', properties: {}, additionalProperties: false };
+const sonnetConfig = RA.claudeRequestConfig({ model: 'claude-sonnet-5', effort: 'medium' }, 8000, schema);
+assert.strictEqual(sonnetConfig.model, 'claude-sonnet-5');
+assert.strictEqual(sonnetConfig.max_tokens, 8000);
+assert.strictEqual(sonnetConfig.thinking.type, 'adaptive');
+assert.strictEqual(sonnetConfig.output_config.effort, 'medium');
+assert.strictEqual(sonnetConfig.output_config.format.type, 'json_schema');
+assert.ok(!Object.prototype.hasOwnProperty.call(sonnetConfig, 'fallbacks'), 'Messages requests do not send the unsupported fallbacks parameter');
+
+const haikuConfig = RA.claudeRequestConfig({ model: 'claude-haiku-4-5', effort: 'high' }, 4000, schema);
+assert.ok(!Object.prototype.hasOwnProperty.call(haikuConfig, 'thinking'), 'Haiku does not receive unsupported adaptive thinking');
+assert.ok(!Object.prototype.hasOwnProperty.call(haikuConfig.output_config, 'effort'), 'Haiku does not receive unsupported effort');
+assert.strictEqual(haikuConfig.output_config.format.schema, schema);
+
 console.log('Prompt grounding and question formatting assertions passed');

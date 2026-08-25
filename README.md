@@ -74,7 +74,7 @@ press **Score against this**.
      explicitly states a duration. **Reset profile** clears stored profile
      values so the next rescan starts clean without deleting either document.
    - **API key** — an [Anthropic API key](https://console.anthropic.com/).
-     Press **Test key** to check it.
+     Press **Test key** to verify both the key and the currently selected model.
 
 PDF extraction is built in and handles normal text-based PDFs. Scanned or
 image-only PDFs will not extract; the page tells you and you paste instead.
@@ -142,6 +142,7 @@ npm install
 npx playwright install chromium
 npm test              # full regression suite
 npm run test:logic    # rules, matching and retrieval, in Node
+npm run test:api      # Anthropic request/response workflows with an intercepted endpoint
 npm run test:keywords # ATS/match scoring against fixture job descriptions, in Node
 npm run test:dom      # scan + fill against a fixture form in real Chromium
 npm run test:panel    # match-score panel rendering against a fixture JD page
