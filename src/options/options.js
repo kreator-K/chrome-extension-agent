@@ -61,6 +61,15 @@ async function mergeProfileFromText(text) {
   return result.changed;
 }
 
+function profileFillSummary(changed) {
+  const fieldCount = changed.filter((key) => key !== 'skills').length;
+  const parts = [];
+  if (fieldCount) parts.push(`filled ${fieldCount} profile field${fieldCount === 1 ? '' : 's'}`);
+  if (changed.skillsAdded) parts.push(`added ${changed.skillsAdded} skill${changed.skillsAdded === 1 ? '' : 's'}`);
+  if (changed.skillYearsFilled) parts.push(`filled ${changed.skillYearsFilled} documented skill duration${changed.skillYearsFilled === 1 ? '' : 's'}`);
+  return parts.join(' · ');
+}
+
 async function applicationResumeWithText() {
   const file = await RA.storage.getApplicationResume();
   if (file.text || !file.dataUrl || !/\.(?:pdf|docx)$/i.test(file.fileName || '')) return file;
@@ -138,7 +147,7 @@ $('saveResume').addEventListener('click', async () => {
   const changed = await mergeProfileFromText(await allProfileSourceText(text));
   await loadResume();
   if (changed.length) await loadProfile();
-  status($('resumeStatus'), changed.length ? `Saved · filled ${changed.length} profile field(s).` : 'Saved.', 'ok');
+  status($('resumeStatus'), changed.length ? `Saved · ${profileFillSummary(changed)}.` : 'Saved.', 'ok');
 });
 
 /* --------------------------------------------------------- application resume */
@@ -204,7 +213,7 @@ $('applicationResumeFile').addEventListener('change', async (ev) => {
     status(
       $('applicationResumeStatus'),
       changed.length
-        ? `Saved and ready · read both sources and filled ${changed.length} profile field(s).`
+        ? `Saved and ready · read both sources and ${profileFillSummary(changed)}.`
         : extractedText
           ? 'Saved and ready · both sources checked; no new blank profile fields found.'
           : 'Saved and ready to attach · no readable text was found in this file.',
@@ -304,7 +313,7 @@ $('extractProfile').addEventListener('click', async () => {
   await loadProfile();
   status(
     $('profileStatus'),
-    changed.length ? `Filled ${changed.length} field(s). Review and save any edits.` : 'No new unambiguous profile facts found.',
+    changed.length ? `${profileFillSummary(changed)}. Review and save any edits.` : 'No new unambiguous profile facts found.',
     changed.length ? 'ok' : ''
   );
 });

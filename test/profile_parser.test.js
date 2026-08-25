@@ -62,6 +62,20 @@ for (const expected of ['User Research', 'Product Management', 'A/B Testing', 'P
 }
 assert.ok(resumeSkillList.skills.every((s) => s.years === ''), 'does not infer unsupported skill durations');
 
+const projectSkills = ctx.RA.extractProfile(`2.7 Projects
+ads-agent / Silk Creative Agent — TypeScript, Next.js, 113 commits
+- Multi-agent AI creative campaign studio with WhatsApp approval
+video-data-agent — Python, 21 commits
+- Pipeline: yt-dlp → OpenCV keyframes → local Whisper → vision model per frame → Llama 3.1 synthesis
+network-agent — Python, 43 commits
+- Approval-first Telegram assistant with Google Calendar MCP integration
+StudentOS — JavaScript, live at student-os.example
+- Information architecture and entity modeling`);
+const projectSkillNames = projectSkills.skills.map((s) => s.name);
+for (const expected of ['Next.js', 'LLM Agents', 'WhatsApp', 'yt-dlp', 'Computer Vision', 'Telegram', 'Model Context Protocol (MCP)', 'Information Architecture', 'Entity Modeling']) {
+  assert.ok(projectSkillNames.includes(expected), `imports documented project skill ${expected}`);
+}
+
 const explicitDuration = ctx.RA.extractProfile('Technical skills: Python, SQL\nPython — 6 years');
 assert.strictEqual(explicitDuration.skills.find((s) => s.name === 'Python').years, 6, 'explicit duration wins over a blank skill mention');
 assert.strictEqual(explicitDuration.skills.find((s) => s.name === 'SQL').years, '');
@@ -71,6 +85,8 @@ const filledBlankDuration = ctx.RA.mergeExtractedProfile(
   explicitDuration
 );
 assert.strictEqual(filledBlankDuration.profile.skills.find((s) => s.name === 'Python').years, 6, 'later explicit evidence fills a blank year');
+assert.strictEqual(filledBlankDuration.changed.skillsAdded, 1, 'reports newly added skills separately from profile fields');
+assert.strictEqual(filledBlankDuration.changed.skillYearsFilled, 1, 'reports later documented durations');
 
 const pollutedDefaults = ctx.RA.mergeExtractedProfile(
   { firstName: '', lastName: '', email: '', degreeLevel: "Master's", workAuthorized: 'yes' },

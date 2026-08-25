@@ -97,6 +97,7 @@
     ['User Research', ['user research']],
     ['A/B Testing', ['a/b testing', 'a-b testing', 'ab testing']],
     ['PLG Onboarding', ['plg onboarding', 'product-led growth onboarding']],
+    ['Product-Led Growth', ['product-led growth']],
     ['Amplitude', ['amplitude']],
     ['Mixpanel', ['mixpanel']],
     ['Figma', ['figma']],
@@ -107,12 +108,20 @@
     ['RAG', ['rag', 'retrieval-augmented generation', 'retrieval augmented generation']],
     ['Vector Retrieval', ['vector retrieval', 'vector search']],
     ['LLM Applications', ['llm applications', 'large language model applications']],
-    ['LLM Evals', ['llm evals', 'model evals']],
+    ['LLM Agents', ['llm agents', 'multi-agent ai', 'multi agent ai']],
+    ['LLM Evals', ['llm evals', 'model evals', 'shipped evals', 'evaluation loop', 'eval rigor']],
     ['Multimodal AI', ['multimodal pipelines', 'multimodal ai']],
     ['AI-assisted Prototyping', ['ai-assisted prototyping', 'ai assisted prototyping']],
+    ['Computer Vision', ['computer vision', 'vision model', 'frame analysis']],
+    ['OCR', ['ocr']],
     ['OpenCV', ['opencv']],
     ['Whisper', ['whisper']],
     ['Llama', ['llama']],
+    ['yt-dlp', ['yt-dlp']],
+    ['Next.js', ['next.js']],
+    ['WhatsApp', ['whatsapp']],
+    ['Telegram', ['telegram']],
+    ['Model Context Protocol (MCP)', ['mcp integration', 'model context protocol']],
     ['Kubernetes', ['kubernetes']],
     ['Docker', ['docker']],
     ['AWS', ['aws', 'amazon web services']],
@@ -125,7 +134,9 @@
     ['Prioritization', ['prioritization', 'prioritisation']],
     ['Stakeholder Management', ['stakeholder management']],
     ['Usability Testing', ['usability testing']],
-    ['Google Ads', ['google ads']],
+    ['Information Architecture', ['information architecture']],
+    ['Entity Modeling', ['entity modeling']],
+    ['Google Ads', ['google ads', 'google hotel ads']],
     ['Meta Ads', ['meta ads']]
   ];
 
@@ -135,6 +146,27 @@
 
   function mentions(text, phrase) {
     return new RegExp('(?:^|[^A-Za-z0-9+#])' + escapedRe(phrase) + '(?=$|[^A-Za-z0-9+#])', 'i').test(text);
+  }
+
+  function addSkill(skillMap, name, years) {
+    const key = String(name || '').trim().toLowerCase();
+    if (!key) return;
+    const existing = skillMap.get(key);
+    const next = { name: String(name).trim(), years: years == null ? '' : years };
+    if (!existing || (existing.years === '' && next.years !== '')) skillMap.set(key, next);
+  }
+
+  function addProjectStackSkills(skillMap, text) {
+    // Project headings are a reliable source for named technologies even when
+    // the knowledge base does not have a separate skills section.
+    const stackRe = /(?:^|\n)\s*[^\n]{2,100}?\s*[—-]\s*([A-Za-z][A-Za-z0-9+#./ -]*(?:,\s*[A-Za-z][A-Za-z0-9+#./ -]*)+),\s*\d+\s+commits?\b/g;
+    let match;
+    while ((match = stackRe.exec(text)) !== null) {
+      for (const item of match[1].split(',')) {
+        const skill = item.trim();
+        if (skill && skill.length <= 40 && skill.split(/\s+/).length <= 4) addSkill(skillMap, skill, '');
+      }
+    }
   }
 
   RA.extractProfile = function (text) {
@@ -276,9 +308,8 @@
     while ((match = skillRe.exec(text)) !== null) {
       const skill = match[1].trim().replace(/^(?:and|with|using)\s+/i, '');
       if (skill.length >= 2 && skill.split(/\s+/).length <= 5) {
-        const key = skill.toLowerCase();
         const yearsValue = Number(match[2]);
-        if (!skillMap.has(key) || skillMap.get(key).years < yearsValue) skillMap.set(key, { name: skill, years: yearsValue });
+        addSkill(skillMap, skill, yearsValue);
       }
     }
     // Resumes and knowledge bases usually list skills without claiming an exact
@@ -286,9 +317,9 @@
     // not manufacture years. An explicit duration above always wins.
     for (const [name, aliases] of SKILL_ALIASES) {
       if (!aliases.some((alias) => mentions(text, alias))) continue;
-      const key = name.toLowerCase();
-      if (!skillMap.has(key)) skillMap.set(key, { name, years: '' });
+      addSkill(skillMap, name, '');
     }
+    addProjectStackSkills(skillMap, text);
     if (skillMap.size) out.skills = Array.from(skillMap.values()).slice(0, 50);
     return out;
   };
@@ -296,6 +327,8 @@
   RA.mergeExtractedProfile = function (current, extracted) {
     const merged = Object.assign({}, current || {});
     const changed = [];
+    let skillsAdded = 0;
+    let skillYearsFilled = 0;
     for (const [key, value] of Object.entries(extracted || {})) {
       if (key === 'skills') {
         const existing = new Map((merged.skills || []).map((s) => [String(s.name).toLowerCase(), s]));
@@ -304,12 +337,14 @@
           if (!existing.has(k)) {
             existing.set(k, skill);
             changed.push('skills');
+            skillsAdded++;
           } else {
             const prior = existing.get(k);
             const priorYears = prior && prior.years;
             if ((priorYears === '' || priorYears == null) && skill.years !== '' && skill.years != null) {
               existing.set(k, Object.assign({}, prior, { years: skill.years }));
               changed.push('skills');
+              skillYearsFilled++;
             }
           }
         }
@@ -325,6 +360,9 @@
         changed.push(key);
       }
     }
-    return { profile: merged, changed: Array.from(new Set(changed)) };
+    const uniqueChanges = Array.from(new Set(changed));
+    uniqueChanges.skillsAdded = skillsAdded;
+    uniqueChanges.skillYearsFilled = skillYearsFilled;
+    return { profile: merged, changed: uniqueChanges };
   };
 })(typeof self !== 'undefined' ? self : this);
