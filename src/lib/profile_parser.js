@@ -119,8 +119,6 @@
     ['Llama', ['llama']],
     ['yt-dlp', ['yt-dlp']],
     ['Next.js', ['next.js']],
-    ['WhatsApp', ['whatsapp']],
-    ['Telegram', ['telegram']],
     ['Model Context Protocol (MCP)', ['mcp integration', 'model context protocol']],
     ['Kubernetes', ['kubernetes']],
     ['Docker', ['docker']],

@@ -72,9 +72,11 @@ network-agent — Python, 43 commits
 StudentOS — JavaScript, live at student-os.example
 - Information architecture and entity modeling`);
 const projectSkillNames = projectSkills.skills.map((s) => s.name);
-for (const expected of ['Next.js', 'LLM Agents', 'WhatsApp', 'yt-dlp', 'Computer Vision', 'Telegram', 'Model Context Protocol (MCP)', 'Information Architecture', 'Entity Modeling']) {
+for (const expected of ['Next.js', 'LLM Agents', 'yt-dlp', 'Computer Vision', 'Model Context Protocol (MCP)', 'Information Architecture', 'Entity Modeling']) {
   assert.ok(projectSkillNames.includes(expected), `imports documented project skill ${expected}`);
 }
+assert.ok(!projectSkillNames.includes('WhatsApp'), 'does not treat a communication channel as a skill');
+assert.ok(!projectSkillNames.includes('Telegram'), 'does not treat a communication channel as a skill');
 
 const explicitDuration = ctx.RA.extractProfile('Technical skills: Python, SQL\nPython — 6 years');
 assert.strictEqual(explicitDuration.skills.find((s) => s.name === 'Python').years, 6, 'explicit duration wins over a blank skill mention');
