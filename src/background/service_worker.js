@@ -273,8 +273,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true; // keep the channel open for the async response
 });
 
-chrome.runtime.onInstalled.addListener(async (details) => {
-  if (details.reason === 'install') {
-    chrome.runtime.openOptionsPage();
-  }
+chrome.runtime.onInstalled.addListener((details) => {
+  (async () => {
+    const stored = await RA.storage.get('profile');
+    if (stored.profile) {
+      const migration = RA.clearLegacyAssumedDefaults(stored.profile);
+      if (migration.changed) await RA.storage.set({ profile: migration.profile });
+    }
+    if (details.reason === 'install') chrome.runtime.openOptionsPage();
+  })().catch((error) => console.error('Profile migration failed:', error));
 });

@@ -16,9 +16,28 @@ const profile = Object.assign({}, RA.DEFAULT_PROFILE, {
   currentTitle: 'Senior Engineer', currentCompany: 'Acme',
   totalYearsExperience: '8', degreeLevel: "Master's", school: 'NITK', major: 'CS',
   workAuthorized: 'yes', requiresSponsorship: 'no', willingToRelocate: 'yes',
+  criminalRecord: 'no', gender: 'Decline to self-identify',
   noticePeriodDays: '30', desiredSalary: '$180,000',
   skills: [{ name: 'Python', years: 6 }, { name: 'Kubernetes', years: 3 }]
 });
+
+assert.strictEqual(RA.DEFAULT_PROFILE.workAuthorized, '', 'fresh profiles never assume work authorization');
+assert.strictEqual(RA.DEFAULT_PROFILE.requiresSponsorship, '', 'fresh profiles never assume sponsorship status');
+
+const legacyMigration = RA.clearLegacyAssumedDefaults({
+  workAuthorized: 'yes', requiresSponsorship: 'no', willingToRelocate: 'yes',
+  willingToTravel: 'yes', workMode: 'hybrid', criminalRecord: 'no',
+  backgroundCheckConsent: 'yes', drugTestConsent: 'yes', previouslyEmployedHere: 'no',
+  relatedToEmployee: 'no', nonCompete: 'no', gender: 'Decline to self-identify',
+  ethnicity: 'Decline to self-identify', veteranStatus: 'I do not wish to answer',
+  disabilityStatus: 'I do not wish to answer', hispanicLatino: 'Decline to self-identify',
+  firstName: 'Prashant'
+});
+assert.strictEqual(legacyMigration.changed, true, 'untouched legacy assumptions are detected');
+assert.strictEqual(legacyMigration.profile.workAuthorized, '', 'legacy legal-status assumption is cleared');
+assert.strictEqual(legacyMigration.profile.firstName, 'Prashant', 'real profile facts survive migration');
+const reviewedMigration = RA.clearLegacyAssumedDefaults(Object.assign({}, legacyMigration.profile, { workAuthorized: 'yes' }));
+assert.strictEqual(reviewedMigration.changed, false, 'partially reviewed profiles are not destructively migrated');
 
 const cases = [
   ['First Name', 'Prashant'],

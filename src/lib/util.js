@@ -22,40 +22,72 @@
     linkedin: '', github: '', portfolio: '', otherUrl: '',
     currentTitle: '', currentCompany: '', totalYearsExperience: '',
     degreeLevel: '', school: '', major: '', gradYear: '',
-    workAuthorized: 'yes',          // yes | no
-    requiresSponsorship: 'no',      // yes | no
+    workAuthorized: '',             // yes | no; never assume a legal status
+    requiresSponsorship: '',        // yes | no; never infer from silence
     workAuthDetail: '',             // free text, e.g. "US citizen"
-    willingToRelocate: 'yes',
-    willingToTravel: 'yes',
-    workMode: 'hybrid',             // remote | hybrid | onsite
+    willingToRelocate: '',
+    willingToTravel: '',
+    workMode: '',                   // remote | hybrid | onsite
     noticePeriodDays: '',
     earliestStartDate: '',
     desiredSalary: '',
     currentSalary: '',
     referralSource: '',
-    criminalRecord: 'no',
-    backgroundCheckConsent: 'yes',
-    drugTestConsent: 'yes',
-    previouslyEmployedHere: 'no',
-    relatedToEmployee: 'no',
-    nonCompete: 'no',
-    gender: 'Decline to self-identify',
-    ethnicity: 'Decline to self-identify',
-    veteranStatus: 'I do not wish to answer',
-    disabilityStatus: 'I do not wish to answer',
-    hispanicLatino: 'Decline to self-identify',
+    criminalRecord: '',
+    backgroundCheckConsent: '',
+    drugTestConsent: '',
+    previouslyEmployedHere: '',
+    relatedToEmployee: '',
+    nonCompete: '',
+    gender: '',
+    ethnicity: '',
+    veteranStatus: '',
+    disabilityStatus: '',
+    hispanicLatino: '',
     skills: [] // [{ name: 'Python', years: 5 }]; years may be blank when unstated
   };
 
   RA.DEFAULT_SETTINGS = DEFAULT_SETTINGS;
   RA.DEFAULT_PROFILE = DEFAULT_PROFILE;
 
+  const LEGACY_ASSUMED_DEFAULTS = {
+    workAuthorized: 'yes', requiresSponsorship: 'no', willingToRelocate: 'yes',
+    willingToTravel: 'yes', workMode: 'hybrid', criminalRecord: 'no',
+    backgroundCheckConsent: 'yes', drugTestConsent: 'yes', previouslyEmployedHere: 'no',
+    relatedToEmployee: 'no', nonCompete: 'no', gender: 'Decline to self-identify',
+    ethnicity: 'Decline to self-identify', veteranStatus: 'I do not wish to answer',
+    disabilityStatus: 'I do not wish to answer', hispanicLatino: 'Decline to self-identify'
+  };
+
+  /** Clear the old untouched template of invented application answers. Profiles
+   * with any deliberate deviation are preserved in full. */
+  RA.clearLegacyAssumedDefaults = function (profile) {
+    const current = Object.assign({}, profile || {});
+    const entries = Object.entries(LEGACY_ASSUMED_DEFAULTS);
+    const untouchedTemplate = entries.every(([key, value]) => String(current[key] == null ? '' : current[key]) === value);
+    if (!untouchedTemplate) return { profile: current, changed: false };
+    for (const [key] of entries) current[key] = '';
+    return { profile: current, changed: true };
+  };
+
   RA.storage = {
     async get(keys) {
-      return new Promise((resolve) => chrome.storage.local.get(keys, resolve));
+      return new Promise((resolve, reject) => {
+        chrome.storage.local.get(keys, (value) => {
+          const error = chrome.runtime && chrome.runtime.lastError;
+          if (error) reject(new Error(error.message));
+          else resolve(value);
+        });
+      });
     },
     async set(obj) {
-      return new Promise((resolve) => chrome.storage.local.set(obj, resolve));
+      return new Promise((resolve, reject) => {
+        chrome.storage.local.set(obj, () => {
+          const error = chrome.runtime && chrome.runtime.lastError;
+          if (error) reject(new Error(error.message));
+          else resolve();
+        });
+      });
     },
     async getSettings() {
       const { settings } = await RA.storage.get('settings');

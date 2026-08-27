@@ -135,13 +135,13 @@ $('kbFile').addEventListener('change', async (ev) => {
   status($('resumeStatus'), 'Reading ' + file.name + '…');
   try {
     if (/\.pdf$/i.test(file.name)) {
-      const { text, ok } = await window.PDFText.extract(await file.arrayBuffer());
+      const { text, ok, error } = await window.PDFText.extract(await file.arrayBuffer());
       $('resumeText').value = text;
       status(
         $('resumeStatus'),
         ok
           ? 'Extracted text from the PDF — read it over, then save.'
-          : 'This PDF did not extract cleanly (it may be scanned). Paste the text instead.',
+          : `This PDF did not extract cleanly${error ? ': ' + error : ' (it may be scanned)'}. Paste the text instead.`,
         ok ? 'ok' : 'err'
       );
     } else {
@@ -222,12 +222,15 @@ $('applicationResumeFile').addEventListener('change', async (ev) => {
   status($('applicationResumeStatus'), 'Saving ' + file.name + ' locally…');
   try {
     let extractedText = '';
+    let extractionError = '';
     if (/\.pdf$/i.test(file.name)) {
       const extracted = await window.PDFText.extract(await file.arrayBuffer());
       if (extracted.ok) extractedText = extracted.text;
+      else extractionError = extracted.error || 'No reliable readable text was found.';
     } else if (/\.docx$/i.test(file.name)) {
       const extracted = await window.DOCXText.extract(await file.arrayBuffer());
       if (extracted.ok) extractedText = extracted.text;
+      else extractionError = 'No reliable readable text was found.';
     }
     await RA.storage.set({
       applicationResume: {
@@ -248,8 +251,8 @@ $('applicationResumeFile').addEventListener('change', async (ev) => {
         ? `Saved and ready · read both sources and ${profileFillSummary(changed)}.`
         : extractedText
           ? 'Saved and ready · both sources checked; no new blank profile fields found.'
-          : 'Saved and ready to attach · no readable text was found in this file.',
-      'ok'
+          : `Saved for attachment, but profile extraction failed: ${extractionError || 'no readable text was found.'}`,
+      extractedText ? 'ok' : 'err'
     );
   } catch (err) {
     status($('applicationResumeStatus'), 'Could not save: ' + err.message, 'err');
@@ -275,6 +278,10 @@ function profileInput(key, label, type, options) {
   let input;
   if (type === 'yesno' || type === 'select') {
     input = document.createElement('select');
+    const blank = document.createElement('option');
+    blank.value = '';
+    blank.textContent = 'Select…';
+    input.appendChild(blank);
     for (const v of type === 'yesno' ? ['yes', 'no'] : options) {
       const opt = document.createElement('option');
       opt.value = v;
