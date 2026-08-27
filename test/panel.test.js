@@ -34,8 +34,22 @@ const CONTENT = path.join(__dirname, '..', 'src', 'content', 'content.js');
         set: (obj, cb) => { Object.assign(window.__STORE, obj); cb && cb(); }
       } },
       runtime: {
+        id: 'test-extension',
         onMessage: { addListener: (fn) => { window.__listeners = window.__listeners || []; window.__listeners.push(fn); } },
-        sendMessage: () => {},
+        sendMessage: (message, callback) => {
+          if (message.type === 'GENERATE_ANSWERS') {
+            callback({
+              ok: true,
+              answers: [{
+                id: message.payload.questions[0].id,
+                value: 'I have built reliable Python platforms and want to bring that experience to this team.',
+                confidence: 0.91,
+                source: 'ai',
+                basis: 'Python platform experience in the resume'
+              }]
+            });
+          }
+        },
         lastError: null
       }
     };
@@ -88,6 +102,26 @@ const CONTENT = path.join(__dirname, '..', 'src', 'content', 'content.js');
   assert.strictEqual(scroll.overflowY, 'auto', 'the whole panel owns the scrollbar');
   assert.ok(scroll.scrollHeight > scroll.clientHeight, 'long match analysis remains scrollable to the questions and Fill all button');
   assert.strictEqual(scroll.actionsPosition, 'sticky', 'Fill all remains available at the bottom while scrolling');
+
+  const perQuestion = await page.evaluate(async () => {
+    const root = document.getElementById('ra-host').shadowRoot;
+    const item = Array.from(root.querySelectorAll('.item')).find((node) => /why this company/i.test(node.querySelector('.q').textContent));
+    const button = item && item.querySelector('[data-act="generate"]');
+    if (!button) return { found: false };
+    button.click();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const updated = Array.from(root.querySelectorAll('.item')).find((node) => /why this company/i.test(node.querySelector('.q').textContent));
+    return {
+      found: true,
+      answer: updated.querySelector('textarea').value,
+      badge: updated.querySelector('.badge').textContent,
+      button: updated.querySelector('[data-act="generate"]').textContent
+    };
+  });
+  assert.strictEqual(perQuestion.found, true, 'unanswered prose question has a per-question AI button');
+  assert.match(perQuestion.answer, /reliable Python platforms/);
+  assert.match(perQuestion.badge, /^AI/);
+  assert.strictEqual(perQuestion.button, 'Regenerate with AI');
 
   await browser.close();
   console.log('\nPanel match-score rendering passed');

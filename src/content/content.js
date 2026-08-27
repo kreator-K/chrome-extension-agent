@@ -178,6 +178,8 @@
   button:hover { background: #f1f3f5; }
   button.primary { background: #1a63d8; border-color: #1a63d8; color: #fff; }
   button.primary:hover { background: #1552b6; }
+  button.ai-one { border-color: #1a63d8; color: #1a63d8; }
+  button.ai-one:hover { background: #eef4ff; }
   button:disabled { opacity: .55; cursor: default; }
   .body { overflow: visible; padding: 8px 10px 12px; flex: none; }
   .item { border: 1px solid #e3e6ea; border-radius: 8px; padding: 8px; margin-bottom: 8px; }
@@ -268,6 +270,12 @@
     return { cls: 'none', text: a.source || '' };
   }
 
+  function canGenerateWithAi(field) {
+    if (!field || field.kind === 'file' || RA.isSensitive(field.label)) return false;
+    if (field.kind === 'textarea') return true;
+    return field.kind === 'text' && /\b(?:why|describe|explain|tell us|share|additional information|anything else|interest|motivat|cover letter)\b/i.test(field.label);
+  }
+
   function render() {
     const shadow = ensurePanel();
     const body = shadow.querySelector('.body');
@@ -286,6 +294,8 @@
         ? `<div class="basis">options: ${f.options.map((o) => o.label).join(' · ').slice(0, 160)}</div>`
         : '';
       const isFile = f.kind === 'file';
+      const canGenerate = canGenerateWithAi(f);
+      const generateLabel = a && a.value ? 'Regenerate with AI' : 'Generate with AI';
       item.innerHTML = `
         <div class="q"></div>
         <div class="meta"><span class="badge ${badge.cls}"></span></div>
@@ -293,6 +303,7 @@
         ${optionHint}
         <div class="basis"></div>
         <div class="row">
+          ${canGenerate ? `<button data-act="generate" class="ai-one">${generateLabel}</button>` : ''}
           <button data-act="fill">${isFile ? 'Attach resume' : 'Fill'}</button>
           <button data-act="show">Show field</button>
           ${isFile ? '' : '<button data-act="save">Save answer</button>'}
@@ -417,7 +428,9 @@
     const fieldId = item.dataset.id;
     const field = state.fields.find((f) => f.id === fieldId);
 
-    if (act === 'fill') {
+    if (act === 'generate') {
+      await runAiForQuestion(field, item);
+    } else if (act === 'fill') {
       const r = await fillItem(item);
       setStatus(r.ok ? `Filled: ${RA.truncate(r.applied, 80)}` : `Could not fill: ${r.reason}`, !r.ok);
     } else if (act === 'show') {
@@ -435,6 +448,50 @@
   }
 
   /* ------------------------------------------------------------- workflow */
+
+  async function runAiForQuestion(field, item) {
+    if (!field || !canGenerateWithAi(field)) return;
+    if (state.busy) { setStatus('Another AI request is already running.'); return; }
+    const button = item.querySelector('[data-act="generate"]');
+    if (button && button.disabled) return;
+    state.busy = true;
+    const allButton = state.shadow.querySelector('[data-act="ai"]');
+    if (button) { button.disabled = true; button.textContent = 'Generating…'; }
+    if (allButton) allButton.disabled = true;
+    setStatus(`Asking Claude: ${RA.truncate(field.label, 100)}`);
+
+    try {
+      const response = await askBackground([field]);
+      if (!response || !response.ok) {
+        if (button) { button.disabled = false; button.textContent = 'Generate with AI'; }
+        setStatus((response && response.error) || 'Could not generate an answer.', true);
+        return;
+      }
+
+      const generated = (response.answers || []).find((answer) => answer.id === field.id);
+      if (!generated || !String(generated.value || '').trim()) {
+        const prior = state.answers.get(field.id);
+        if (!prior || !prior.value) {
+          state.answers.set(field.id, generated || {
+            id: field.id, value: '', confidence: 0, source: 'ai', basis: 'No grounded answer returned.'
+          });
+          render();
+        } else if (button) {
+          button.disabled = false;
+          button.textContent = 'Regenerate with AI';
+        }
+        setStatus((generated && generated.basis) || 'Claude did not return a grounded answer for this question.', true);
+        return;
+      }
+
+      state.answers.set(field.id, generated);
+      render();
+      setStatus('Generated one answer. Review it, then choose Fill or Save answer.');
+    } finally {
+      state.busy = false;
+      if (allButton && allButton.isConnected) allButton.disabled = false;
+    }
+  }
 
   async function computeMatch() {
     const [profile, resume, applicationResume] = await Promise.all([
