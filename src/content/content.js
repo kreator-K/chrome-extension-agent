@@ -11,6 +11,38 @@
     match: null, matchAi: null, matchBusy: false, jdOverride: ''
   };
 
+  // Reloading/updating an extension invalidates content scripts that were
+  // already injected into open tabs. Chrome throws synchronously in that old
+  // script, so every message must be guarded; otherwise its expected lifecycle
+  // event is recorded as an extension error.
+  function runtimeFailure(error) {
+    const message = String(error && error.message ? error.message : error || 'No response from the extension.');
+    if (/extension context invalidated/i.test(message)) {
+      return { ok: false, contextInvalidated: true, error: 'Resume Autofill was updated. Refresh this page, then open the panel again.' };
+    }
+    return { ok: false, error: message };
+  }
+
+  function sendRuntimeMessage(message) {
+    return new Promise((resolve) => {
+      try {
+        if (!chrome.runtime || !chrome.runtime.id) {
+          resolve(runtimeFailure('Extension context invalidated.'));
+          return;
+        }
+        chrome.runtime.sendMessage(message, (response) => {
+          if (chrome.runtime.lastError) {
+            resolve(runtimeFailure(chrome.runtime.lastError));
+            return;
+          }
+          resolve(response || { ok: false, error: 'No response from the extension.' });
+        });
+      } catch (error) {
+        resolve(runtimeFailure(error));
+      }
+    });
+  }
+
   /* --------------------------------------------------------- page context */
 
   function pickText(selectors, max) {
@@ -127,15 +159,9 @@
   }
 
   async function askBackground(unresolved) {
-    return new Promise((resolve) => {
-      chrome.runtime.sendMessage(
-        { type: 'GENERATE_ANSWERS', payload: { questions: unresolved, pageContext: pageContext() } },
-        (res) => {
-          if (chrome.runtime.lastError) resolve({ ok: false, error: chrome.runtime.lastError.message });
-          else resolve(res || { ok: false, error: 'no response' });
-        }
-      );
-    });
+    return sendRuntimeMessage(
+      { type: 'GENERATE_ANSWERS', payload: { questions: unresolved, pageContext: pageContext() } }
+    );
   }
 
   /* ------------------------------------------------------------- the panel */
@@ -398,9 +424,12 @@
       RA.highlightField(fieldId, true);
       setTimeout(() => RA.highlightField(fieldId, false), 2500);
     } else if (act === 'save') {
-      chrome.runtime.sendMessage(
-        { type: 'SAVE_ANSWER', question: field.label, answer: answerOf(item) },
-        () => setStatus('Saved to your answer bank — it will be reused on the next application.')
+      const result = await sendRuntimeMessage(
+        { type: 'SAVE_ANSWER', question: field.label, answer: answerOf(item) }
+      );
+      setStatus(
+        result && result.ok ? 'Saved to your answer bank — it will be reused on the next application.' : result.error,
+        !(result && result.ok)
       );
     }
   }
@@ -432,20 +461,19 @@
       .filter((f) => f.value && /major|degree|education|school|graduat|gpa|internship|leadership|university organization/i.test(f.label))
       .map((f) => `${f.label}: ${f.value}`)
       .join('\n');
-    chrome.runtime.sendMessage(
+    sendRuntimeMessage(
       {
         type: 'ANALYZE_MATCH',
         payload: { jobDescription: state.jdOverride || ctx.jobDescription, jobTitle: ctx.jobTitle, company: ctx.company, applicationFacts }
-      },
-      (res) => {
-        state.matchBusy = false;
-        if (!res || !res.ok) { setStatus((res && res.error) || 'Could not analyze the match.', true); renderMatch(); return; }
-        if (res.local) state.match = res.local;
-        state.matchAi = res.ai;
-        if (!res.ai) setStatus(res.aiError || 'No AI suggestions available — check your API key in settings.', !!res.aiError);
-        renderMatch();
       }
-    );
+    ).then((res) => {
+      state.matchBusy = false;
+      if (!res || !res.ok) { setStatus((res && res.error) || 'Could not analyze the match.', true); renderMatch(); return; }
+      if (res.local) state.match = res.local;
+      state.matchAi = res.ai;
+      if (!res.ai) setStatus(res.aiError || 'No AI suggestions available — check your API key in settings.', !!res.aiError);
+      renderMatch();
+    });
   }
 
   async function scan() {
