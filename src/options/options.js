@@ -61,6 +61,13 @@ async function mergeProfileFromText(text) {
   return result.changed;
 }
 
+function profileSourceSummary(resume, applicationResume) {
+  const sources = [];
+  if (String(resume && resume.text || '').trim()) sources.push(`knowledge base: ${String(resume.text).trim().length.toLocaleString()} chars`);
+  if (String(applicationResume && applicationResume.text || '').trim()) sources.push(`application resume: ${String(applicationResume.text).trim().length.toLocaleString()} chars`);
+  return sources.length ? sources.join(' · ') : 'no readable source text';
+}
+
 function profileFillSummary(changed) {
   const fieldCount = changed.filter((key) => key !== 'skills').length;
   const parts = [];
@@ -104,6 +111,14 @@ async function allProfileSourceText(editorText) {
   return unique.join('\n\n');
 }
 
+async function profileSources() {
+  const [resume, applicationResume] = await Promise.all([
+    RA.storage.getResume(),
+    applicationResumeWithText()
+  ]);
+  return { resume, applicationResume };
+}
+
 /* ------------------------------------------------------------- knowledge base */
 
 async function loadResume() {
@@ -131,11 +146,28 @@ $('kbFile').addEventListener('change', async (ev) => {
       );
     } else {
       $('resumeText').value = await file.text();
-      status($('resumeStatus'), 'Loaded — press Save.', 'ok');
+      status($('resumeStatus'), 'Loaded — saving and scanning…', 'ok');
     }
     $('resumeMeta').textContent = file.name;
+    // A file picker is an explicit upload action. Persist it immediately so a
+    // later profile rescan cannot accidentally use the previous knowledge base.
+    const text = $('resumeText').value.trim();
+    await RA.storage.set({
+      resume: { text, fileName: file.name, updatedAt: Date.now() }
+    });
+    const changed = await mergeProfileFromText(await allProfileSourceText(text));
+    await Promise.all([loadResume(), changed.length ? loadProfile() : Promise.resolve()]);
+    status(
+      $('resumeStatus'),
+      changed.length
+        ? `Saved and scanned · ${profileFillSummary(changed)}.`
+        : `Saved and scanned · both sources checked; no new blank profile fields found.`,
+      'ok'
+    );
   } catch (err) {
     status($('resumeStatus'), err.message, 'err');
+  } finally {
+    ev.target.value = '';
   }
 });
 
@@ -309,13 +341,28 @@ $('saveProfile').addEventListener('click', async () => {
 });
 
 $('extractProfile').addEventListener('click', async () => {
-  const changed = await mergeProfileFromText(await allProfileSourceText($('resumeText').value));
-  await loadProfile();
-  status(
-    $('profileStatus'),
-    changed.length ? `${profileFillSummary(changed)}. Review and save any edits.` : 'No new unambiguous profile facts found.',
-    changed.length ? 'ok' : ''
-  );
+  try {
+    const sources = await profileSources();
+    const text = [
+      $('resumeText').value,
+      sources.resume.text,
+      sources.applicationResume.text
+    ].filter(Boolean).join('\n\n');
+    const extracted = RA.extractProfile(text);
+    const changed = await mergeProfileFromText(text);
+    await loadProfile();
+    const found = Object.keys(extracted).filter((key) => key !== 'skills').length;
+    const sourceSummary = profileSourceSummary(sources.resume, sources.applicationResume);
+    status(
+      $('profileStatus'),
+      changed.length
+        ? `${profileFillSummary(changed)}. Read ${sourceSummary}; found ${found} profile facts.`
+        : `No new blank profile facts. Read ${sourceSummary}; found ${found} extractable profile facts.`,
+      changed.length ? 'ok' : ''
+    );
+  } catch (err) {
+    status($('profileStatus'), 'Profile scan failed: ' + (err && err.message ? err.message : String(err)), 'err');
+  }
 });
 
 $('resetProfile').addEventListener('click', async () => {
