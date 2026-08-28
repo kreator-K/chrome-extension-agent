@@ -1,6 +1,6 @@
 /* Service worker: owns the Anthropic API key and every network call.
  * Content scripts never see the key and never talk to api.anthropic.com. */
-importScripts('../lib/util.js', '../lib/rules.js', '../lib/keywords.js', '../lib/prompts.js', '../lib/profile_parser.js');
+importScripts('../lib/util.js', '../lib/rules.js', '../lib/keywords.js', '../lib/prompts.js', '../lib/profile_parser.js', '../lib/docx_builder.js');
 
 const RA = self.RA;
 const API_URL = 'https://api.anthropic.com/v1/messages';
@@ -46,6 +46,40 @@ const MATCH_SCHEMA = {
     }
   },
   required: ['summary', 'keywordSuggestions'],
+  additionalProperties: false
+};
+
+const RESUME_SCHEMA = {
+  type: 'object',
+  properties: {
+    education: { type: 'array', items: { type: 'object', properties: {
+      school: { type: 'string' }, location: { type: 'string' }, degree: { type: 'string' }, date: { type: 'string' },
+      bullets: { type: 'array', items: { type: 'string' } }
+    }, required: ['school', 'location', 'degree', 'date', 'bullets'], additionalProperties: false } },
+    skills: { type: 'array', items: { type: 'object', properties: {
+      label: { type: 'string' }, text: { type: 'string' }
+    }, required: ['label', 'text'], additionalProperties: false } },
+    experience: { type: 'array', items: { type: 'object', properties: {
+      company: { type: 'string' }, location: { type: 'string' }, title: { type: 'string' }, date: { type: 'string' },
+      summary: { type: 'string' }, bullets: { type: 'array', items: { type: 'string' } }
+    }, required: ['company', 'location', 'title', 'date', 'summary', 'bullets'], additionalProperties: false } },
+    projects: { type: 'array', items: { type: 'object', properties: {
+      name: { type: 'string' }, description: { type: 'string' }
+    }, required: ['name', 'description'], additionalProperties: false } },
+    additional: { type: 'array', items: { type: 'string' } }
+  },
+  required: ['education', 'skills', 'experience', 'projects', 'additional'],
+  additionalProperties: false
+};
+
+const COVER_LETTER_SCHEMA = {
+  type: 'object',
+  properties: {
+    date: { type: 'string' }, company: { type: 'string' }, role: { type: 'string' }, salutation: { type: 'string' },
+    paragraphs: { type: 'array', minItems: 3, maxItems: 4, items: { type: 'string' } },
+    closing: { type: 'string' }
+  },
+  required: ['date', 'company', 'role', 'salutation', 'paragraphs', 'closing'],
   additionalProperties: false
 };
 
@@ -210,6 +244,98 @@ async function analyzeMatch({ jobDescription, jobTitle, company, applicationFact
   return { local, ai };
 }
 
+async function careerSources() {
+  const [settings, profile, resume, applicationResume] = await Promise.all([
+    RA.storage.getSettings(), RA.storage.getProfile(), RA.storage.getResume(), RA.storage.getApplicationResume()
+  ]);
+  if (!settings.apiKey) throw new Error('No API key set. Open the extension options and add one.');
+  if (!applicationResume.text) throw new Error('The application resume has no readable text. Upload a text-based PDF or DOCX in Options.');
+  return { settings, profile, resume, applicationResume };
+}
+
+function compactResumeDraft(draft) {
+  const clip = (value, max) => {
+    const text = String(value || '').replace(/\s+/g, ' ').trim();
+    if (text.length <= max) return text;
+    const cut = text.slice(0, max + 1);
+    return cut.slice(0, Math.max(cut.lastIndexOf(' '), max - 25)).replace(/[,:; -]+$/, '') + '.';
+  };
+  let bulletsLeft = 12;
+  return {
+    education: (draft.education || []).slice(0, 2).map((item) => ({
+      school: clip(item.school, 100), location: clip(item.location, 45), degree: clip(item.degree, 100), date: clip(item.date, 30),
+      bullets: (item.bullets || []).slice(0, 1).map((value) => clip(value, 150))
+    })),
+    skills: (draft.skills || []).slice(0, 2).map((item) => ({ label: clip(item.label, 30), text: clip(item.text, 300) })),
+    experience: (draft.experience || []).slice(0, 6).map((item) => {
+      const count = Math.min(4, bulletsLeft, (item.bullets || []).length);
+      bulletsLeft -= count;
+      return {
+        company: clip(item.company, 80), location: clip(item.location, 45), title: clip(item.title, 80), date: clip(item.date, 35),
+        summary: clip(item.summary, 150), bullets: (item.bullets || []).slice(0, count).map((value) => clip(value, 235))
+      };
+    }),
+    projects: (draft.projects || []).slice(0, 3).map((item) => ({ name: clip(item.name, 45), description: clip(item.description, 180) })),
+    additional: (draft.additional || []).slice(0, 2).map((value) => clip(value, 180))
+  };
+}
+
+async function generateTailoredResume({ jobDescription, jobTitle, company }) {
+  if (!jobDescription || jobDescription.trim().length < 40) throw new Error('No readable job description found.');
+  const { settings, profile, resume, applicationResume } = await careerSources();
+  const evidence = [applicationResume.text, resume.text].filter(Boolean).join('\n\n');
+  let prior = null;
+  let best = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const priorText = prior ? `\n\n=== PRIOR DRAFT ===\n${JSON.stringify(prior.draft)}\n\nIts verified local score was ${prior.score}. Missing relevant terms: ${prior.missing.join(', ') || 'none'}. Improve only where the evidence truthfully supports it.` : '';
+    const body = Object.assign(RA.claudeRequestConfig(settings, 16000, RESUME_SCHEMA), {
+      system: [
+        'You tailor one candidate resume to one job description.',
+        'Return the complete resume in the supplied structure, preserving the source resume section order, employers, roles, dates, education, project count, and one-page density.',
+        'Never invent or upgrade facts, titles, dates, metrics, employers, degrees, skills, tools, or scope. Use the knowledge base only to clarify or reword facts that are genuinely supported.',
+        'Use exact job-description terminology only where an existing fact supports it. Do not keyword-stuff.',
+        'Keep every bullet concise, evidence-led, and results-oriented. Preserve all numerical claims exactly unless the evidence supplies a more precise version.',
+        'Keep roughly the same number of bullets per role as the source. The DOCX renderer preserves the visual format; your task is content only.',
+        'Technical Proficiency should contain only demonstrated skills. WhatsApp and Telegram are product channels, not skills.',
+        '', '=== PROFILE ===', RA.profileSummary(profile),
+        '', '=== SOURCE APPLICATION RESUME — structural and factual authority ===', applicationResume.text,
+        '', '=== KNOWLEDGE BASE — supporting evidence only ===', RA.retrieve(evidence, jobDescription, 14000)
+      ].join('\n'),
+      messages: [{ role: 'user', content: `Target role: ${jobTitle || 'unknown'}${company ? ' at ' + company : ''}\n\nJob description:\n${RA.truncate(jobDescription, 8000)}${priorText}\n\nProduce the complete tailored resume now.` }]
+    });
+    const parsed = compactResumeDraft(parsedStructuredResponse(await callClaude(settings, body), 'tailored resume'));
+    if (!parsed.experience.length || !parsed.education.length) throw new Error('Anthropic returned an incomplete resume structure.');
+    const sourceNorm = RA.normalize(applicationResume.text);
+    const unknownCompany = parsed.experience.find((item) => item.company && !sourceNorm.includes(RA.normalize(item.company)));
+    if (unknownCompany) throw new Error(`Tailoring introduced an unsupported employer: ${unknownCompany.company}. No document was created.`);
+    const resumeText = RA.resumeDraftText(parsed);
+    const scored = RA.matchScore(jobDescription, resumeText, profile, jobTitle);
+    const candidate = { draft: parsed, score: scored.score, missing: scored.missing, breakdown: scored.breakdown, attempts: attempt };
+    if (!best || candidate.score > best.score) best = candidate;
+    if (candidate.score >= 90) break;
+    prior = candidate;
+  }
+  return Object.assign(best, { targetMet: best.score >= 90 });
+}
+
+async function generateCoverLetter({ jobDescription, jobTitle, company }) {
+  if (!jobDescription || jobDescription.trim().length < 40) throw new Error('No readable job description found.');
+  const { settings, profile, resume, applicationResume } = await careerSources();
+  const evidence = [applicationResume.text, resume.text].filter(Boolean).join('\n\n');
+  const body = Object.assign(RA.claudeRequestConfig(settings, 6000, COVER_LETTER_SCHEMA), {
+    system: [
+      'Write a concise, specific cover letter grounded only in the candidate evidence and supplied job description.',
+      'Never invent facts, company research, motivations, metrics, skills, or experience.',
+      'Use three or four short paragraphs: role-specific opening, two evidence connections, and a direct close.',
+      'Stay under 400 words. Do not repeat the resume or use generic enthusiasm, buzzwords, headings, or bullet lists.',
+      '', '=== PROFILE ===', RA.profileSummary(profile),
+      '', '=== CANDIDATE EVIDENCE ===', RA.retrieve(evidence, jobDescription, 12000)
+    ].join('\n'),
+    messages: [{ role: 'user', content: `Role: ${jobTitle || 'unknown'}\nCompany: ${company || 'Hiring company'}\n\nJob description:\n${RA.truncate(jobDescription, 8000)}\n\nWrite the grounded cover letter.` }]
+  });
+  return parsedStructuredResponse(await callClaude(settings, body), 'cover letter');
+}
+
 async function testApiKey(apiKey, model) {
   const settings = await RA.storage.getSettings();
   const selectedModel = model || settings.model || 'claude-opus-5';
@@ -234,6 +360,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           break;
         case 'ANALYZE_MATCH':
           sendResponse(Object.assign({ ok: true }, await analyzeMatch(msg.payload || {})));
+          break;
+        case 'GENERATE_TAILORED_RESUME':
+          sendResponse({ ok: true, result: await generateTailoredResume(msg.payload || {}) });
+          break;
+        case 'GENERATE_COVER_LETTER':
+          sendResponse({ ok: true, result: await generateCoverLetter(msg.payload || {}) });
           break;
         case 'SAVE_ANSWER':
           await RA.storage.saveAnswer(msg.question, msg.answer);

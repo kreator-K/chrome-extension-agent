@@ -75,6 +75,8 @@ assert.ok(!(appianKeywords.includes('roadmap') && appianKeywords.includes('produ
 const appianMatch = RA.matchScore(APPIAN_JOB, 'Product owner for an AI platform using Agile and usability testing.', { totalYearsExperience: '7', currentTitle: 'Product Manager' }, 'Product Manager (2027 Graduates)');
 assert.strictEqual(appianMatch.breakdown.yearsRequired, null, 'does not treat company age or salary numbers as experience requirements');
 assert.ok(appianMatch.breakdown.titleMatch > 70, 'uses the explicit job title for title similarity');
+const productFamilyMatch = RA.matchScore(APPIAN_JOB, 'Product strategy and product management.', { totalYearsExperience: '7', currentTitle: 'Head of Product' }, 'Product Manager Intern');
+assert.strictEqual(productFamilyMatch.breakdown.titleMatch, 100, 'recognizes equivalent product-role title families without rewriting a real title');
 
 // Deterministic and offline: no network, no chrome.runtime dependency.
 assert.strictEqual(typeof RA.matchScore, 'function');

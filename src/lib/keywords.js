@@ -145,6 +145,15 @@
     return firstLines.join(' ');
   }
 
+  function titleFamily(title) {
+    const value = RA.normalize(title);
+    // Product leadership and product-management titles are the same function
+    // at different seniority levels. Broader families such as "engineering"
+    // are intentionally not collapsed: frontend and backend titles are not
+    // interchangeable for matching purposes.
+    return /\bproduct\b/.test(value) ? 'product' : '';
+  }
+
   /**
    * Score a resume against a job description. Fully local — no network call.
    * @returns {{score:int, matched:Array, missing:Array, breakdown:object}}
@@ -178,11 +187,12 @@
     const currentTitle = profile && profile.currentTitle;
     const currentTitleNorm = RA.normalize(currentTitle);
     const wantedTitleNorm = RA.normalize(wantedTitle);
+    const sameTitleFamily = titleFamily(currentTitle) && titleFamily(currentTitle) === titleFamily(wantedTitle);
     const titleMatch = currentTitle
-      ? (currentTitleNorm && wantedTitleNorm &&
+      ? (sameTitleFamily ? 1 : (currentTitleNorm && wantedTitleNorm &&
           (wantedTitleNorm.includes(currentTitleNorm) || currentTitleNorm.includes(wantedTitleNorm))
         ? 1
-        : RA.similarity(currentTitle, wantedTitle))
+        : RA.similarity(currentTitle, wantedTitle)))
       : 0.5;
 
     // Years-of-experience: full credit if we meet or exceed a stated minimum.

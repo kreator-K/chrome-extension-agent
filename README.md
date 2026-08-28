@@ -56,6 +56,14 @@ fully offline, no API key or network call needed:
 If the page's job description isn't auto-detected, paste it into the panel and
 press **Score against this**.
 
+## Tailored application documents
+
+From the match panel you can also:
+
+- **Create 90+ tailored resume** — Claude rewrites only evidence-supported wording, preserves the source resume's one-page section structure and visual conventions, and the extension rescores the result locally. It makes a second grounded pass when the first draft is below 90. If genuine unsupported gaps make 90 impossible, the panel shows the best truthful score instead of inventing experience.
+- **Download tailored resume (.docx)** — creates an editable Word document using the source resume's Letter layout, compact Calibri typography, centered section headings, aligned dates/locations, hyperlinks and real bullets.
+- **Create cover letter** — creates a concise JD-specific letter grounded in the same resume and knowledge-base evidence, with a separate DOCX download.
+
 ## Install
 
 1. Clone this repo.
@@ -105,10 +113,9 @@ Submit.
 - Resume text, the original application-resume file, profile, answer bank and
   API key live in `chrome.storage.local` in your browser profile. Nothing syncs
   anywhere.
-- The original application-resume file is never sent to Anthropic. Only
-  relevant text from the knowledge base is included in an AI request.
+- The original application-resume file bytes are never sent to Anthropic. Relevant extracted text from both the application resume and knowledge base is included only in an explicitly requested AI workflow.
 - The only network destination is `api.anthropic.com`, and only when you press
-  **Answer remaining with AI** or **Explain gaps with AI**. Tiers 1 and 2 of
+  an AI answer, **Explain gaps with AI**, **Create 90+ tailored resume**, or **Create cover letter**. Tiers 1 and 2 of
   answering, and the base resume match score, are fully offline.
 - The API key stays in the service worker; content scripts never see it.
 - **Export everything (JSON)** omits the API key by design.
@@ -129,6 +136,7 @@ src/lib/fields.js        form scanning, label extraction, framework-safe filling
 src/lib/keywords.js      offline resume/JD match scoring and keyword extraction
 src/lib/prompts.js       grounded, question-aware AI prompt construction
 src/lib/profile_parser.js conservative offline profile extraction
+src/lib/docx_builder.js  local OOXML/DOCX creation and downloads
 src/content/content.js   in-page orchestration and the review panel
 src/background/          Anthropic API calls; the only place the key is used
 src/options/             knowledge base, profile, settings, answer bank, PDF text, ATS checklist
@@ -144,6 +152,7 @@ npm test              # full regression suite
 npm run test:logic    # rules, matching and retrieval, in Node
 npm run test:api      # Anthropic request/response workflows with an intercepted endpoint
 npm run test:keywords # ATS/match scoring against fixture job descriptions, in Node
+npm run test:docx     # generated resume/cover-letter OOXML and layout structure
 npm run test:dom      # scan + fill against a fixture form in real Chromium
 npm run test:panel    # match-score panel rendering against a fixture JD page
 npm run test:workflow # fresh profile: upload, extract, scan, fill and attach
@@ -171,6 +180,7 @@ second command above.
 - The match score is a keyword-overlap heuristic, the same approach real ATS
   keyword-matchers use — not a guarantee of how any specific ATS will score
   you. Treat it as a checklist, not a verdict.
+- A 90+ tailored score is a target, not permission to fabricate. When the supplied evidence cannot support enough required terms, the extension reports and downloads the best truthful version with its actual score.
 - The dictionary of skills/tools in `src/lib/keywords.js` is deliberately
   broad but not exhaustive; role-specific multi-word phrases outside it are
   still picked up from the posting's own text, just with less precision than a

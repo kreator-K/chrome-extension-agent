@@ -11,7 +11,7 @@
       <p class="lead">
         Everything below is stored locally in this browser profile. The resume text and
         your API key are sent only to the Anthropic API, and only when you ask for an
-        AI answer on a form.
+        AI answer, match explanation, tailored resume, or cover letter.
       </p>
 
       <section>
@@ -36,7 +36,8 @@
         <h2>2. Application resume</h2>
         <p class="hint">
           This is the actual file attached to résumé/CV upload fields on applications.
-          It stays separate from the text knowledge base and is never sent to Anthropic.
+          It stays separate from the text knowledge base. Its extracted text is sent to Anthropic only when you explicitly request
+          an AI answer, match explanation, tailored resume, or cover letter; the original file bytes are never sent.
           PDF or DOCX is recommended so profile facts can also be read from the file.
           Legacy DOC files can be attached but not text-extracted. Maximum size: 5 MB.
         </p>

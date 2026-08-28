@@ -48,6 +48,16 @@ const CONTENT = path.join(__dirname, '..', 'src', 'content', 'content.js');
                 basis: 'Python platform experience in the resume'
               }]
             });
+          } else if (message.type === 'GENERATE_TAILORED_RESUME') {
+            callback({ ok: true, result: {
+              score: 92, targetMet: true, attempts: 1, missing: [], breakdown: {},
+              draft: { education: [], skills: [], experience: [], projects: [], additional: [] }
+            } });
+          } else if (message.type === 'GENERATE_COVER_LETTER') {
+            callback({ ok: true, result: {
+              date: 'August 28, 2026', company: 'Example', role: 'Senior Backend Engineer',
+              salutation: 'Dear Hiring Team,', paragraphs: ['One', 'Two', 'Three'], closing: 'Sincerely,'
+            } });
           }
         },
         lastError: null
@@ -90,6 +100,16 @@ const CONTENT = path.join(__dirname, '..', 'src', 'content', 'content.js');
   });
   console.log('Missing keywords shown:', chips.join(', '));
   assert.ok(chips.some((c) => /terraform|kafka/i.test(c)), 'expected Terraform/Kafka to show as a gap');
+
+  const careerButtons = await page.evaluate(() => {
+    const root = document.getElementById('ra-host').shadowRoot;
+    return {
+      resume: root.querySelector('[data-act="tailorresume"]')?.textContent,
+      cover: root.querySelector('[data-act="coverletter"]')?.textContent
+    };
+  });
+  assert.match(careerButtons.resume, /90\+ tailored resume/);
+  assert.match(careerButtons.cover, /cover letter/i);
 
   const scroll = await page.evaluate(() => {
     const root = document.getElementById('ra-host').shadowRoot;

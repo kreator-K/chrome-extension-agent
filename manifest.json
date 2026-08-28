@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Resume Autofill — Job Application Assistant",
-  "version": "0.3.13",
+  "version": "0.4.0",
   "description": "Answers job application questions on LinkedIn and other portals using your resume knowledge base.",
   "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": ["https://api.anthropic.com/*"],
@@ -38,6 +38,7 @@
         "src/lib/rules.js",
         "src/lib/fields.js",
         "src/lib/keywords.js",
+        "src/lib/docx_builder.js",
         "src/content/content.js"
       ],
       "css": ["src/content/overlay.css"],

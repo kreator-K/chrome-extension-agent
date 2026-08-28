@@ -23,6 +23,11 @@ Sources used for extraction regression:
 | Resume attachment implementation | Pass in isolated Chromium |
 | Fill-all implementation | Pass in isolated Chromium; preserves existing values |
 | Submission | Not attempted by design |
+| JD-tailored resume generation | Pass: two-pass grounded generation with local score verification |
+| Source-format DOCX output | Pass: Letter, compact Calibri, aligned dates/locations, real bullets and hyperlinks |
+| Tailored resume download | Pass: local `.docx` download |
+| JD-specific cover letter | Pass: grounded generation and separate `.docx` download |
+| DOCX visual render QA | Pass: resume and cover-letter samples rendered cleanly in LibreOffice |
 
 ## Root causes and fixes
 

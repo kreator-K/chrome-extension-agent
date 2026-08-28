@@ -8,7 +8,8 @@
   const RA = window.RA;
   let state = {
     fields: [], answers: new Map(), panel: null, shadow: null, busy: false,
-    match: null, matchAi: null, matchBusy: false, jdOverride: ''
+    match: null, matchAi: null, matchBusy: false, jdOverride: '',
+    careerBusy: false, tailoredResume: null, coverLetter: null
   };
 
   // Reloading/updating an extension invalidates content scripts that were
@@ -68,8 +69,10 @@
   }
 
   function pageContext() {
+    const pageTitle = document.title;
+    const companyFromTitle = ((pageTitle.match(/\bat\s+(.+?)(?:\s*[|—-].*)?$/i) || [])[1] || '').trim();
     return {
-      title: document.title,
+      title: pageTitle,
       url: location.href,
       jobTitle: pickText([
         'h1.top-card-layout__title',
@@ -85,12 +88,13 @@
         '[data-testid="company-name"]',
         '.company-name',
         '.main-header-content h1'
-      ], 120),
+      ], 120) || companyFromTitle,
       jobDescription: pickBlockText([
         '.jobs-description__content',
         '.description__text',
         '#content .section-wrapper',
         '[data-testid="job-description"]',
+        '.job__description',
         '.job-description',
         '#job_description'
       ], 4000)
@@ -224,6 +228,9 @@
   .kw-chip.gap { border-color: #c9a227; color: #8a6d0b; }
   .kw-chip.gap.required { border-color: #b3261e; color: #b3261e; background: #fdf0ef; font-weight: 600; }
   .kw-note { font-size: 11.5px; color: #4a4f57; margin-top: 3px; padding-left: 2px; border-left: 2px solid #e3e6ea; padding-left: 6px; }
+  .career { margin-top: 9px; border-top: 1px solid #e3e6ea; padding-top: 8px; }
+  .career-result { margin-top: 6px; padding: 7px; border-radius: 6px; background: #f1f7f3; color: #1f6a43; font-size: 11.5px; }
+  .career-result.warn { background: #fff8e6; color: #7a5a00; }
   .match textarea.jd-paste { margin-top: 6px; min-height: 50px; }
   `;
 
@@ -368,6 +375,12 @@
             <strong>${escapeHtml(s.keyword)}</strong> — ${s.inResume ? `add to <em>${escapeHtml(s.section)}</em>: ` : ''}${escapeHtml(s.suggestion)}
           </div>`).join('')
       : '';
+    const resumeResult = state.tailoredResume
+      ? `<div class="career-result ${state.tailoredResume.targetMet ? '' : 'warn'}">Tailored resume score: <strong>${state.tailoredResume.score}</strong>${state.tailoredResume.targetMet ? ' · target reached' : ' · best truthful result; unsupported gaps were not invented'}<div class="row"><button data-act="downloadresume">Download tailored resume (.docx)</button></div></div>`
+      : '';
+    const coverResult = state.coverLetter
+      ? '<div class="career-result">Cover letter is ready.<div class="row"><button data-act="downloadcover">Download cover letter (.docx)</button></div></div>'
+      : '';
 
     host.innerHTML = `
       <div class="match-top">
@@ -387,6 +400,15 @@
       <div class="row">
         ${missing.length ? '<button data-act="matchai">Explain gaps with AI</button>' : ''}
         <button data-act="pastejd">Use a different job description</button>
+      </div>
+      <div class="career">
+        <div class="kw-title">Tailored application documents</div>
+        <div class="kw-note" style="border:none;padding-left:0;">Uses both saved sources and the detected JD. The resume keeps the source layout and is rescored locally; unsupported claims are never added to force 90.</div>
+        <div class="row">
+          <button data-act="tailorresume" ${state.careerBusy ? 'disabled' : ''}>Create 90+ tailored resume</button>
+          <button data-act="coverletter" ${state.careerBusy ? 'disabled' : ''}>Create cover letter</button>
+        </div>
+        ${resumeResult}${coverResult}
       </div>`;
   }
 
@@ -413,10 +435,16 @@
     if (act === 'pastejd') {
       state.match = null;
       state.matchAi = null;
+      state.tailoredResume = null;
+      state.coverLetter = null;
       renderMatch();
       return;
     }
     if (act === 'matchai') { await runMatchAi(); return; }
+    if (act === 'tailorresume') { await runCareerDocument('resume'); return; }
+    if (act === 'coverletter') { await runCareerDocument('cover'); return; }
+    if (act === 'downloadresume') { await downloadCareerDocument('resume'); return; }
+    if (act === 'downloadcover') { await downloadCareerDocument('cover'); return; }
     if (act === 'fillall') {
       let filled = 0; let failed = 0; let preserved = 0;
       for (const el of state.shadow.querySelectorAll('.item')) {
@@ -512,6 +540,8 @@
     } else {
       state.match = RA.matchScore(jd, scoredResume, profile, pageContext().jobTitle);
       state.matchAi = null;
+      state.tailoredResume = null;
+      state.coverLetter = null;
     }
     renderMatch();
   }
@@ -539,6 +569,59 @@
       if (!res.ai) setStatus(res.aiError || 'No AI suggestions available — check your API key in settings.', !!res.aiError);
       renderMatch();
     });
+  }
+
+  function safeFilePart(value, fallback) {
+    const cleaned = String(value || '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60);
+    return cleaned || fallback;
+  }
+
+  async function runCareerDocument(kind) {
+    if (state.careerBusy) return;
+    const ctx = pageContext();
+    const jobDescription = state.jdOverride || ctx.jobDescription;
+    if (!jobDescription || jobDescription.trim().length < 40) {
+      setStatus('No job description detected. Choose “Use a different job description” and paste it first.', true);
+      return;
+    }
+    state.careerBusy = true;
+    renderMatch();
+    setStatus(kind === 'resume' ? 'Tailoring and rescoring the resume…' : 'Creating a grounded cover letter…');
+    const type = kind === 'resume' ? 'GENERATE_TAILORED_RESUME' : 'GENERATE_COVER_LETTER';
+    const response = await sendRuntimeMessage({ type, payload: {
+      jobDescription, jobTitle: ctx.jobTitle, company: ctx.company
+    } });
+    state.careerBusy = false;
+    if (!response || !response.ok) {
+      setStatus((response && response.error) || 'Document generation failed.', true);
+      renderMatch();
+      return;
+    }
+    if (kind === 'resume') {
+      state.tailoredResume = response.result;
+      setStatus(response.result.targetMet
+        ? `Tailored resume reached ${response.result.score}. Review and download the DOCX.`
+        : `Best truthful resume scored ${response.result.score}; remaining gaps are unsupported by the supplied evidence.`);
+    } else {
+      state.coverLetter = response.result;
+      setStatus('Cover letter created. Review the role and company, then download the DOCX.');
+    }
+    renderMatch();
+  }
+
+  async function downloadCareerDocument(kind) {
+    const profile = await RA.storage.getProfile();
+    const ctx = pageContext();
+    const role = safeFilePart(ctx.jobTitle, 'Role');
+    const company = safeFilePart(ctx.company, 'Company');
+    const candidate = safeFilePart([profile.firstName, profile.lastName].filter(Boolean).join('_'), 'Candidate');
+    if (kind === 'resume' && state.tailoredResume) {
+      RA.downloadDocx(RA.buildResumeDocx(state.tailoredResume.draft, profile), `${candidate}_${role}_Resume.docx`);
+      setStatus('Tailored resume downloaded.');
+    } else if (kind === 'cover' && state.coverLetter) {
+      RA.downloadDocx(RA.buildCoverLetterDocx(state.coverLetter, profile), `${candidate}_${company}_${role}_Cover_Letter.docx`);
+      setStatus('Cover letter downloaded.');
+    }
   }
 
   async function scan() {

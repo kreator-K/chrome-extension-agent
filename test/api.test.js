@@ -12,7 +12,7 @@ const store = {
   },
   profile: { firstName: 'Alex', lastName: 'Rivera', skills: [] },
   resume: { text: 'Product manager who shipped a Python analytics product.', fileName: 'kb.txt' },
-  applicationResume: { text: 'Product manager with enterprise product experience.', fileName: 'resume.pdf' },
+  applicationResume: { text: 'Product Manager at Example Co with enterprise product experience.', fileName: 'resume.pdf' },
   answerBank: []
 };
 
@@ -59,6 +59,18 @@ global.fetch = async (url, options) => {
         suggestion: 'Not supported by the resume — do not add unless true.', section: 'Skills'
       }]
     });
+  } else if (schema && schema.properties && schema.properties.education) {
+    payload.content[0].text = JSON.stringify({
+      education: [{ school: 'Example University', location: 'New York, NY', degree: 'MBA', date: '2027', bullets: [] }],
+      skills: [{ label: 'Product', text: 'Product management, enterprise product strategy' }],
+      experience: [{ company: 'Example Co', location: 'New York, NY', title: 'Product Manager', date: '2022 - Present', summary: 'Enterprise product platform', bullets: ['Shipped a Python analytics product using Agile roadmaps and stakeholder management.'] }],
+      projects: [], additional: []
+    });
+  } else if (schema && schema.properties && schema.properties.paragraphs) {
+    payload.content[0].text = JSON.stringify({
+      date: 'August 28, 2026', company: 'Example', role: 'Platform Product Manager', salutation: 'Dear Hiring Team,',
+      paragraphs: ['I am applying for this role.', 'My enterprise product experience aligns with the work.', 'I welcome a conversation.'], closing: 'Sincerely,'
+    });
   }
   return { ok: true, status: 200, text: async () => JSON.stringify(payload) };
 };
@@ -90,6 +102,21 @@ function send(message) {
   assert.strictEqual(match.ok, true);
   assert.strictEqual(match.ai.summary, 'The main gap is Kubernetes.');
   assert.ok(match.ai.keywordSuggestions.length);
+
+  const tailored = await send({
+    type: 'GENERATE_TAILORED_RESUME',
+    payload: { jobTitle: 'Platform Product Manager', company: 'Example', jobDescription: 'We require Python, Agile product roadmaps, stakeholder management, and enterprise product strategy experience.' }
+  });
+  assert.strictEqual(tailored.ok, true);
+  assert.ok(tailored.result.draft.experience.length);
+  assert.strictEqual(typeof tailored.result.score, 'number');
+
+  const cover = await send({
+    type: 'GENERATE_COVER_LETTER',
+    payload: { jobTitle: 'Platform Product Manager', company: 'Example', jobDescription: 'We require Python, Agile product roadmaps, stakeholder management, and enterprise product strategy experience.' }
+  });
+  assert.strictEqual(cover.ok, true);
+  assert.strictEqual(cover.result.paragraphs.length, 3);
 
   for (const request of requests) {
     assert.ok(!Object.prototype.hasOwnProperty.call(request.body, 'fallbacks'));
