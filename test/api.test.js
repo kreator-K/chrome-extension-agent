@@ -76,6 +76,9 @@ function send(message) {
   });
   assert.strictEqual(answers.ok, true);
   assert.strictEqual(answers.answers[0].value, 'A grounded answer.');
+  const answerPrompt = requests[0].body.system;
+  assert.match(answerPrompt, /Python analytics product/, 'AI answer prompt includes the knowledge base');
+  assert.match(answerPrompt, /enterprise product experience/, 'AI answer prompt includes the application resume');
 
   const match = await send({
     type: 'ANALYZE_MATCH',

@@ -61,6 +61,9 @@ const CONTENT = path.join(__dirname, '..', 'src', 'content', 'content.js');
   for (const file of LIBS) await page.addScriptTag({ path: file });
   await page.addScriptTag({ path: CONTENT });
 
+  const launcher = await page.waitForSelector('#ra-launcher', { timeout: 3000 }).catch(() => null);
+  assert.ok(launcher, 'launcher appears for SPA applications whose controls are not inside a form');
+
   // Content script registers its message listener synchronously; drive it
   // exactly like the popup does with an OPEN_PANEL message.
   await page.evaluate(() => new Promise((resolve) => {

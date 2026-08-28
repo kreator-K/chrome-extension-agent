@@ -41,7 +41,7 @@ const { chromium } = require('playwright');
     mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     buffer: Buffer.from('test-docx-bytes')
   });
-  await page.waitForFunction(() => /Saved and ready/.test(document.getElementById('applicationResumeStatus').textContent));
+  await page.waitForFunction(() => /Saved (?:and ready|for attachment)/.test(document.getElementById('applicationResumeStatus').textContent));
   const storedFile = await page.evaluate(() => new Promise((resolve) => {
     chrome.storage.local.get('applicationResume', ({ applicationResume }) => resolve(applicationResume));
   }));

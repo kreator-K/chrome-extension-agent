@@ -52,6 +52,8 @@ const cases = [
   ['What is your notice period?', '30 days'],
   ['Expected salary', '$180,000'],
   ['Are you willing to relocate?', 'Yes'],
+  ['Location (City)', 'Austin'],
+  ['Degree', "Master's"],
   ['Highest level of education completed', "Master's"],
   ['Have you ever been convicted of a felony?', 'No'],
   ['Gender', 'Decline to self-identify']

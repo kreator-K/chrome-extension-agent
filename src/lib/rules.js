@@ -47,7 +47,7 @@
       match: /phone|mobile number|contact number/,
       answer: (p) => p.phone
     },
-    { id: 'city', match: /^city|city of residence|current city/, answer: (p) => p.city },
+    { id: 'city', match: /^city\b|^location(?: \(?(?:city)?\)?)?\s*$|city of residence|current city/, answer: (p) => p.city },
     { id: 'state', match: /^state|province|region/, answer: (p) => p.state },
     { id: 'country', match: /^country/, answer: (p) => p.country },
     { id: 'zip', match: /zip|postal code/, answer: (p) => p.postalCode },
@@ -136,7 +136,7 @@
       answer: (p) => p.workMode
     },
 
-    { id: 'degree', match: /^(highest (level of )?(education|degree)|degree (level|attained|name)?|education level)\b/, answer: (p) => p.degreeLevel },
+    { id: 'degree', match: /^(highest (level of )?(education|degree)|degree(?: (?:level|attained|name))?|education level)\b/, answer: (p) => p.degreeLevel },
     { id: 'school', match: /^(school|university|college|institution)( name)?\b|^name of (your )?(school|university|college|institution)/, answer: (p) => p.school },
     { id: 'major', match: /^(major|field of study|discipline|specialization)( name)?\b/, answer: (p) => p.major },
     { id: 'grad_year', match: /graduation (year|date)|year of (graduation|passing)/, answer: (p) => p.gradYear },

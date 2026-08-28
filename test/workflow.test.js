@@ -8,7 +8,7 @@ const assert = require('assert');
 const { chromium } = require('playwright');
 
 const ROOT = path.join(__dirname, '..');
-const LIBS = ['src/lib/util.js', 'src/lib/rules.js', 'src/lib/fields.js', 'src/lib/keywords.js']
+const LIBS = ['src/lib/util.js', 'src/lib/profile_parser.js', 'src/lib/rules.js', 'src/lib/fields.js', 'src/lib/keywords.js']
   .map((file) => path.join(ROOT, file));
 const CONTENT = path.join(ROOT, 'src', 'content', 'content.js');
 

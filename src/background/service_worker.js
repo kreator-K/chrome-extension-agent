@@ -1,6 +1,6 @@
 /* Service worker: owns the Anthropic API key and every network call.
  * Content scripts never see the key and never talk to api.anthropic.com. */
-importScripts('../lib/util.js', '../lib/rules.js', '../lib/keywords.js', '../lib/prompts.js');
+importScripts('../lib/util.js', '../lib/rules.js', '../lib/keywords.js', '../lib/prompts.js', '../lib/profile_parser.js');
 
 const RA = self.RA;
 const API_URL = 'https://api.anthropic.com/v1/messages';
@@ -98,12 +98,14 @@ async function generateAnswers({ questions, pageContext }) {
 
   const profile = await RA.storage.getProfile();
   const resume = await RA.storage.getResume();
-  if (!resume.text) throw new Error('No resume knowledge base uploaded yet.');
+  const applicationResume = await RA.storage.getApplicationResume();
+  const evidenceText = [resume.text, applicationResume.text].filter(Boolean).join('\n\n');
+  if (!evidenceText) throw new Error('No readable resume knowledge base or application resume uploaded yet.');
 
   const bank = await RA.storage.getAnswerBank();
   const limited = questions.slice(0, settings.maxAiQuestions);
   const query = limited.map((q) => q.label).join(' ');
-  const resumeExcerpt = RA.retrieve(resume.text, query, 12000);
+  const resumeExcerpt = RA.retrieve(evidenceText, query, 12000);
   const priorAnswers = bank
     .slice()
     .sort((a, b) => (b.uses || 0) - (a.uses || 0))

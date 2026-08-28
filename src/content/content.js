@@ -100,11 +100,19 @@
   /* ------------------------------------------------------ local answering */
 
   async function resolveLocally(fields) {
-    const [profile, bank, applicationResume] = await Promise.all([
+    const [storedProfile, bank, resume, applicationResume] = await Promise.all([
       RA.storage.getProfile(),
       RA.storage.getAnswerBank(),
+      RA.storage.getResume(),
       RA.storage.getApplicationResume()
     ]);
+    // Older installs may have saved the source documents before profile
+    // extraction was reliable. Re-derive blank facts at scan time so portal
+    // answers always consider both sources, without overwriting reviewed data.
+    const sourceText = [resume.text, applicationResume.text].filter(Boolean).join('\n\n');
+    const profile = sourceText && RA.extractProfile
+      ? RA.mergeExtractedProfile(storedProfile, RA.extractProfile(sourceText)).profile
+      : storedProfile;
     const resolved = new Map();
     const unresolved = [];
 
@@ -588,7 +596,17 @@
   // small launcher rather than opening the panel unprompted.
   function maybeShowLauncher() {
     if (document.getElementById('ra-launcher') || document.getElementById('ra-host')) return;
-    const count = document.querySelectorAll('form input:not([type=hidden]), form textarea, form select').length;
+    // Ashby and some SPA portals render an application as controlled inputs
+    // without a semantic <form>. Content scripts already run only on known job
+    // portal hosts, so count visible application-like controls page-wide.
+    const count = Array.from(document.querySelectorAll('input:not([type=hidden]), textarea, select'))
+      .filter((el) => {
+        if (el.name === 'g-recaptcha-response' || /captcha/i.test(el.id || '')) return false;
+        if (el.closest('[role="search"], nav, header')) return false;
+        const rect = el.getBoundingClientRect();
+        const style = getComputedStyle(el);
+        return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+      }).length;
     if (count < 3) return;
     const btn = document.createElement('button');
     btn.id = 'ra-launcher';

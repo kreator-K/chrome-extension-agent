@@ -115,6 +115,32 @@
     return Array.from(groups.values()).filter((g) => g.length > 1);
   }
 
+  function buttonGroups(rootEl) {
+    return Array.from(rootEl.querySelectorAll('[class*="application-form-input-yesno"]'))
+      .map((group) => ({
+        group,
+        buttons: Array.from(group.querySelectorAll('button[data-option]')).filter((button) => visible(button))
+      }))
+      .filter(({ buttons }) => buttons.length >= 2);
+  }
+
+  function buttonGroupLabel(group) {
+    const input = group.querySelector('input');
+    if (input) {
+      const label = fromLabelFor(input);
+      if (label) return label;
+    }
+    const field = group.closest('[data-field-path], .ashby-application-form-field-entry, fieldset, [role="group"]');
+    const heading = field && field.querySelector('label, legend, .ashby-application-form-question-title');
+    return textOf(heading) || fromAncestorText(group);
+  }
+
+  function buttonGroupRequired(group) {
+    const field = group.closest('[data-field-path], .ashby-application-form-field-entry, fieldset, [role="group"]');
+    return !!(field && (field.querySelector('[required], [aria-required="true"]') ||
+      field.querySelector('label[class*="required"], ._required_f7cvd_91')));
+  }
+
   function groupLabel(inputs) {
     const fieldset = inputs[0].closest('fieldset');
     if (fieldset) {
@@ -155,6 +181,25 @@
     seq = 0;
     const out = [];
     const claimed = new Set();
+
+    for (const { group, buttons } of buttonGroups(doc)) {
+      const id = 'f' + ++seq;
+      group.querySelectorAll('input').forEach((input) => claimed.add(input));
+      const options = buttons.map((button) => ({
+        label: textOf(button) || button.dataset.option,
+        value: button.dataset.option || textOf(button)
+      }));
+      const current = buttons.find((button) => button.getAttribute('aria-pressed') === 'true');
+      registry.set(id, { kind: 'button-group', buttons });
+      out.push({
+        id,
+        kind: 'button-group',
+        label: buttonGroupLabel(group),
+        options,
+        value: current ? (textOf(current) || current.dataset.option || '') : '',
+        required: buttonGroupRequired(group)
+      });
+    }
 
     for (const inputs of radioGroups(doc)) {
       const id = 'f' + ++seq;
@@ -250,6 +295,21 @@
       pick.input.focus();
       pick.input.click();
       fire(pick.input, ['input', 'change']);
+      return { ok: true, applied: pick.label };
+    }
+
+    if (entry.kind === 'button-group') {
+      const options = entry.buttons.map((button) => ({
+        label: textOf(button) || button.dataset.option,
+        value: button.dataset.option || textOf(button),
+        button
+      }));
+      const pick = RA.bestOption(options, value) || RA.bestOption(options, /^y/i.test(value) ? 'yes' : 'no');
+      if (!pick) return { ok: false, reason: 'no matching option' };
+      if (pick.button.getAttribute('aria-pressed') !== 'true') {
+        pick.button.focus();
+        pick.button.click();
+      }
       return { ok: true, applied: pick.label };
     }
 

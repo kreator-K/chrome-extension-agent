@@ -22,13 +22,14 @@ const FILES = ['src/lib/util.js', 'src/lib/rules.js', 'src/lib/fields.js']
   assert.ok(byLabel('email address'), 'finds the email input');
   assert.ok(byLabel('legally authorized'), 'finds an aria-labelledby select');
   assert.strictEqual(byLabel('legally authorized').kind, 'select');
-  assert.ok(byLabel('sponsorship'), 'finds the radio group by its legend');
-  assert.strictEqual(byLabel('sponsorship').kind, 'radio');
-  assert.strictEqual(byLabel('sponsorship').options.length, 2);
+  assert.ok(byLabel('future require sponsorship'), 'finds the radio group by its legend');
+  assert.strictEqual(byLabel('future require sponsorship').kind, 'radio');
+  assert.strictEqual(byLabel('future require sponsorship').options.length, 2);
   assert.strictEqual(byLabel('why do you want').kind, 'textarea');
   assert.strictEqual(byLabel('why do you want').maxLength, 300);
   assert.ok(byLabel('years of experience'), 'finds the years-of-experience input');
   assert.ok(byLabel('certify'), 'finds the checkbox');
+  assert.strictEqual(byLabel('will you require sponsorship').kind, 'button-group', 'recognizes Ashby-style Yes/No buttons');
   assert.strictEqual(byLabel('upload your resume').kind, 'file', 'finds the resume upload');
   assert.ok(!byLabel('optional cover letter'), 'does not claim unrelated file uploads');
   assert.ok(!fields.some((f) => /search/i.test(f.label)), 'skips the search box');
@@ -44,6 +45,7 @@ const FILES = ['src/lib/util.js', 'src/lib/rules.js', 'src/lib/fields.js']
     out.radio = await R.fillField(ids.sponsor, 'No');
     out.textarea = await R.fillField(ids.why, 'x'.repeat(400));
     out.checkbox = await R.fillField(ids.tos, 'Yes');
+    out.buttonGroup = await R.fillField(ids.buttonGroup, 'No');
     out.combobox = await R.fillField(ids.source, 'Handshake');
     out.file = await R.fillField(ids.resume, {
       fileName: 'Alex_Rivera_Resume.pdf',
@@ -56,6 +58,7 @@ const FILES = ['src/lib/util.js', 'src/lib/rules.js', 'src/lib/fields.js']
       sponsor: (document.querySelector('input[name=sponsor]:checked') || {}).value,
       whyLen: document.getElementById('why').value.length,
       tos: document.getElementById('tos').checked,
+      buttonGroup: document.querySelector('[data-field-path="sponsorship-buttons"] button[data-option="no"]').getAttribute('aria-pressed'),
       source: document.querySelector('#source-combo').closest('.select__value-container').querySelector('.select__single-value')?.textContent,
       resumeName: (document.getElementById('resume-upload').files[0] || {}).name
     };
@@ -63,9 +66,10 @@ const FILES = ['src/lib/util.js', 'src/lib/rules.js', 'src/lib/fields.js']
   }, {
     fn: byLabel('first name').id,
     auth: byLabel('legally authorized').id,
-    sponsor: byLabel('sponsorship').id,
+    sponsor: byLabel('future require sponsorship').id,
     why: byLabel('why do you want').id,
     tos: byLabel('certify').id,
+    buttonGroup: byLabel('will you require sponsorship').id,
     source: byLabel('how did you hear').id,
     resume: byLabel('upload your resume').id
   });
@@ -75,6 +79,7 @@ const FILES = ['src/lib/util.js', 'src/lib/rules.js', 'src/lib/fields.js']
   assert.strictEqual(result.dom.sponsor, 'no', 'radio resolved "No"');
   assert.strictEqual(result.dom.whyLen, 300, 'textarea respected maxlength');
   assert.strictEqual(result.dom.tos, true);
+  assert.strictEqual(result.dom.buttonGroup, 'true', 'custom Yes/No button was selected');
   assert.strictEqual(result.dom.source, 'Handshake', 'custom combobox selected a real option');
   assert.strictEqual(result.dom.resumeName, 'Alex_Rivera_Resume.pdf');
   assert.strictEqual(result.file.ok, true);
