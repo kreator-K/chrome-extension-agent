@@ -73,8 +73,9 @@ From the match panel you can also:
    - **Knowledge base** — upload a `.txt`/`.md`/`.pdf` resume or paste text.
      Put more in than the one-pager: project detail, metrics, stories, phrasing
      you like. This is what the model draws on.
-   - **Application resume** — upload the actual `.pdf`, `.doc`, or `.docx` file
-     to attach to résumé/CV fields. This is separate from the knowledge base.
+   - **Application resumes** — upload up to five `.pdf`, `.doc`, or `.docx` files.
+     Choose an active file for résumé/CV attachment; all readable files remain
+     available as profile and AI evidence. This is separate from the knowledge base.
    - **Profile** — review the mechanical fields extracted from the resume and
      knowledge base. Existing edits are never overwritten; use **Fill from
      resume & knowledge base** to rescan on demand. Recognized skill names are
@@ -110,7 +111,7 @@ Submit.
 
 ## Privacy
 
-- Resume text, the original application-resume file, profile, answer bank and
+- Resume text, the original application-resume files, profile, answer bank and
   API key live in `chrome.storage.local` in your browser profile. Nothing syncs
   anywhere.
 - The original application-resume file bytes are never sent to Anthropic. Relevant extracted text from both the application resume and knowledge base is included only in an explicitly requested AI workflow.

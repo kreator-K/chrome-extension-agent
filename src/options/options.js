@@ -61,10 +61,11 @@ async function mergeProfileFromText(text) {
   return result.changed;
 }
 
-function profileSourceSummary(resume, applicationResume) {
+function profileSourceSummary(resume, applicationResume, applicationResumes) {
   const sources = [];
   if (String(resume && resume.text || '').trim()) sources.push(`knowledge base: ${String(resume.text).trim().length.toLocaleString()} chars`);
-  if (String(applicationResume && applicationResume.text || '').trim()) sources.push(`application resume: ${String(applicationResume.text).trim().length.toLocaleString()} chars`);
+  const files = Array.isArray(applicationResumes) ? applicationResumes : (applicationResume ? [applicationResume] : []);
+  files.filter((f) => String(f.text || '').trim()).forEach((f) => sources.push(`application resume${f.fileName ? ` (${f.fileName})` : ''}: ${String(f.text).trim().length.toLocaleString()} chars`));
   return sources.length ? sources.join(' · ') : 'no readable source text';
 }
 
@@ -77,8 +78,8 @@ function profileFillSummary(changed) {
   return parts.join(' · ');
 }
 
-async function applicationResumeWithText() {
-  const file = await RA.storage.getApplicationResume();
+async function applicationResumeWithText(file) {
+  file = file || await RA.storage.getApplicationResume();
   if (file.text || !file.dataUrl || !/\.(?:pdf|docx)$/i.test(file.fileName || '')) return file;
   try {
     const buffer = await (await fetch(file.dataUrl)).arrayBuffer();
@@ -87,7 +88,9 @@ async function applicationResumeWithText() {
       : await window.DOCXText.extract(buffer);
     if (extracted.ok && extracted.text) {
       const updated = Object.assign({}, file, { text: extracted.text });
-      await RA.storage.set({ applicationResume: updated });
+      const list = await RA.storage.getApplicationResumes();
+      const next = list.map((item) => item.id === file.id ? updated : item);
+      await RA.storage.setApplicationResumes(next, file.id);
       return updated;
     }
   } catch (e) { /* keep the file attachment even when legacy text cannot be recovered */ }
@@ -95,13 +98,14 @@ async function applicationResumeWithText() {
 }
 
 async function allProfileSourceText(editorText) {
-  const [resume, applicationResume] = await Promise.all([
+  const [resume, storedApplicationResumes] = await Promise.all([
     RA.storage.getResume(),
-    applicationResumeWithText()
+    RA.storage.getApplicationResumes()
   ]);
+  const applicationResumes = await Promise.all(storedApplicationResumes.map((file) => applicationResumeWithText(file)));
   const unique = [];
   const seen = new Set();
-  for (const value of [editorText, resume.text, applicationResume.text]) {
+  for (const value of [editorText, resume.text, ...applicationResumes.map((f) => f.text)]) {
     const text = String(value || '').trim();
     if (text && !seen.has(text)) {
       seen.add(text);
@@ -112,11 +116,13 @@ async function allProfileSourceText(editorText) {
 }
 
 async function profileSources() {
-  const [resume, applicationResume] = await Promise.all([
+  const [resume, storedApplicationResumes] = await Promise.all([
     RA.storage.getResume(),
-    applicationResumeWithText()
+    RA.storage.getApplicationResumes()
   ]);
-  return { resume, applicationResume };
+  const applicationResumes = await Promise.all(storedApplicationResumes.map((file) => applicationResumeWithText(file)));
+  const active = await RA.storage.getActiveApplicationResume();
+  return { resume, applicationResume: active, applicationResumes };
 }
 
 /* ------------------------------------------------------------- knowledge base */
@@ -197,13 +203,26 @@ function fileAsDataUrl(file) {
 }
 
 async function loadApplicationResume() {
-  const file = await applicationResumeWithText();
-  $('applicationResumeMeta').textContent = file.fileName
-    ? `${file.fileName} · ${(file.size / 1024).toFixed(1)} KB` +
-      (file.text ? ` · ${file.text.length.toLocaleString()} text chars` : ' · attachment only') +
-      ` · saved ${new Date(file.updatedAt).toLocaleString()}`
-    : 'No application resume saved.';
-  $('clearApplicationResume').disabled = !file.fileName;
+  const files = await RA.storage.getApplicationResumes();
+  const active = await RA.storage.getActiveApplicationResume();
+  $('applicationResumeMeta').textContent = files.length
+    ? `${files.length}/5 saved · active: ${active.fileName || 'none'} (active file is attached to applications)`
+    : 'No application resumes saved.';
+  $('clearApplicationResume').disabled = !files.length;
+  const host = $('applicationResumeList'); host.innerHTML = '';
+  files.forEach((file) => {
+    const row = document.createElement('div'); row.className = 'resume-item';
+    row.innerHTML = '<label><input type="radio" name="activeApplicationResume" /> <span class="resume-name"></span></label><span class="resume-detail hint"></span><button type="button" class="danger">Remove</button>';
+    const radio = row.querySelector('input'); radio.value = file.id; radio.checked = file.id === active.id;
+    row.querySelector('.resume-name').textContent = file.fileName || 'Unnamed resume';
+    row.querySelector('.resume-detail').textContent = `${(file.size / 1024).toFixed(1)} KB${file.text ? ` · ${file.text.length.toLocaleString()} text chars` : ' · attachment only'}`;
+    radio.addEventListener('change', async () => { await RA.storage.setApplicationResumes(files, file.id); await loadApplicationResume(); status($('applicationResumeStatus'), `${file.fileName} is now active.`, 'ok'); });
+    row.querySelector('button').addEventListener('click', async () => {
+      if (!confirm(`Remove ${file.fileName || 'this resume'}?`)) return;
+      const next = files.filter((item) => item.id !== file.id); await RA.storage.setApplicationResumes(next, active.id === file.id ? (next[0] && next[0].id) : active.id); await loadApplicationResume(); status($('applicationResumeStatus'), 'Removed.', 'ok');
+    });
+    host.appendChild(row);
+  });
 }
 
 $('applicationResumeFile').addEventListener('change', async (ev) => {
@@ -232,16 +251,18 @@ $('applicationResumeFile').addEventListener('change', async (ev) => {
       if (extracted.ok) extractedText = extracted.text;
       else extractionError = 'No reliable readable text was found.';
     }
-    await RA.storage.set({
-      applicationResume: {
+    const files = await RA.storage.getApplicationResumes();
+    if (files.length >= 5) throw new Error('You can store up to 5 application resumes. Remove one before adding another.');
+    const newResume = {
+        id: (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function' ? globalThis.crypto.randomUUID() : `application-resume-${Date.now()}`),
         fileName: file.name,
         mimeType: file.type || 'application/octet-stream',
         size: file.size,
         dataUrl: await fileAsDataUrl(file),
         text: extractedText,
         updatedAt: Date.now()
-      }
-    });
+      };
+    await RA.storage.setApplicationResumes(files.concat(newResume), files.length ? undefined : newResume.id);
     const changed = await mergeProfileFromText(await allProfileSourceText());
     await loadApplicationResume();
     if (changed.length) await loadProfile();
@@ -263,7 +284,10 @@ $('applicationResumeFile').addEventListener('change', async (ev) => {
 
 $('clearApplicationResume').addEventListener('click', async () => {
   if (!confirm('Remove the saved application resume from this browser?')) return;
-  await RA.storage.set({ applicationResume: null });
+  const files = await RA.storage.getApplicationResumes();
+  const active = await RA.storage.getActiveApplicationResume();
+  const next = files.filter((item) => item.id !== active.id);
+  await RA.storage.setApplicationResumes(next);
   await loadApplicationResume();
   status($('applicationResumeStatus'), 'Removed.', 'ok');
 });
@@ -353,13 +377,13 @@ $('extractProfile').addEventListener('click', async () => {
     const text = [
       $('resumeText').value,
       sources.resume.text,
-      sources.applicationResume.text
+      ...(sources.applicationResumes || []).map((file) => file.text)
     ].filter(Boolean).join('\n\n');
     const extracted = RA.extractProfile(text);
     const changed = await mergeProfileFromText(text);
     await loadProfile();
     const found = Object.keys(extracted).filter((key) => key !== 'skills').length;
-    const sourceSummary = profileSourceSummary(sources.resume, sources.applicationResume);
+    const sourceSummary = profileSourceSummary(sources.resume, sources.applicationResume, sources.applicationResumes);
     status(
       $('profileStatus'),
       changed.length
@@ -453,12 +477,13 @@ $('clearBank').addEventListener('click', async () => {
 });
 
 $('exportAll').addEventListener('click', async () => {
-  const [settings, profile, resume, applicationResume, answerBank] = await Promise.all([
+  const [settings, profile, resume, applicationResumes, answerBank] = await Promise.all([
     RA.storage.getSettings(), RA.storage.getProfile(), RA.storage.getResume(),
-    RA.storage.getApplicationResume(), RA.storage.getAnswerBank()
+    RA.storage.getApplicationResumes(), RA.storage.getAnswerBank()
   ]);
   // The API key is deliberately left out of the export.
-  const data = { profile, resume, applicationResume, answerBank, settings: Object.assign({}, settings, { apiKey: '' }) };
+  const activeApplicationResumeId = (await RA.storage.getActiveApplicationResume()).id;
+  const data = { profile, resume, applicationResumes, activeApplicationResumeId, answerBank, settings: Object.assign({}, settings, { apiKey: '' }) };
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   const a = document.createElement('a');
   a.href = url;
@@ -477,7 +502,11 @@ $('importFile').addEventListener('change', async (ev) => {
     const patch = {};
     if (data.profile) patch.profile = Object.assign({}, RA.DEFAULT_PROFILE, data.profile);
     if (data.resume) patch.resume = data.resume;
-    if (data.applicationResume) patch.applicationResume = data.applicationResume;
+    if (Array.isArray(data.applicationResumes)) {
+      patch.applicationResumes = data.applicationResumes.slice(0, 5);
+      patch.activeApplicationResumeId = data.activeApplicationResumeId || (patch.applicationResumes[0] && patch.applicationResumes[0].id) || '';
+      patch.applicationResume = patch.applicationResumes.find((item) => item.id === patch.activeApplicationResumeId) || patch.applicationResumes[0] || null;
+    } else if (data.applicationResume) patch.applicationResume = data.applicationResume;
     if (Array.isArray(data.answerBank)) patch.answerBank = data.answerBank;
     if (data.settings) {
       const current = await RA.storage.getSettings();

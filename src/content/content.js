@@ -104,16 +104,17 @@
   /* ------------------------------------------------------ local answering */
 
   async function resolveLocally(fields) {
-    const [storedProfile, bank, resume, applicationResume] = await Promise.all([
+    const [storedProfile, bank, resume, applicationResumes] = await Promise.all([
       RA.storage.getProfile(),
       RA.storage.getAnswerBank(),
       RA.storage.getResume(),
-      RA.storage.getApplicationResume()
+      RA.storage.getApplicationResumes()
     ]);
+    const applicationResume = await RA.storage.getActiveApplicationResume();
     // Older installs may have saved the source documents before profile
     // extraction was reliable. Re-derive blank facts at scan time so portal
     // answers always consider both sources, without overwriting reviewed data.
-    const sourceText = [resume.text, applicationResume.text].filter(Boolean).join('\n\n');
+    const sourceText = [resume.text, ...applicationResumes.map((item) => item.text)].filter(Boolean).join('\n\n');
     const profile = sourceText && RA.extractProfile
       ? RA.mergeExtractedProfile(storedProfile, RA.extractProfile(sourceText)).profile
       : storedProfile;
@@ -531,7 +532,7 @@
 
   async function computeMatch() {
     const [profile, resume, applicationResume] = await Promise.all([
-      RA.storage.getProfile(), RA.storage.getResume(), RA.storage.getApplicationResume()
+      RA.storage.getProfile(), RA.storage.getResume(), RA.storage.getActiveApplicationResume()
     ]);
     const jd = state.jdOverride || pageContext().jobDescription;
     const scoredResume = applicationResume.text || resume.text;

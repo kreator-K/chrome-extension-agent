@@ -132,8 +132,9 @@ async function generateAnswers({ questions, pageContext }) {
 
   const profile = await RA.storage.getProfile();
   const resume = await RA.storage.getResume();
-  const applicationResume = await RA.storage.getApplicationResume();
-  const evidenceText = [resume.text, applicationResume.text].filter(Boolean).join('\n\n');
+  const applicationResumes = await RA.storage.getApplicationResumes();
+  const applicationResume = await RA.storage.getActiveApplicationResume();
+  const evidenceText = [resume.text, ...applicationResumes.map((item) => item.text)].filter(Boolean).join('\n\n');
   if (!evidenceText) throw new Error('No readable resume knowledge base or application resume uploaded yet.');
 
   const bank = await RA.storage.getAnswerBank();
@@ -193,7 +194,8 @@ async function analyzeMatch({ jobDescription, jobTitle, company, applicationFact
   const settings = await RA.storage.getSettings();
   const profile = await RA.storage.getProfile();
   const resume = await RA.storage.getResume();
-  const applicationResume = await RA.storage.getApplicationResume();
+  const applicationResume = await RA.storage.getActiveApplicationResume();
+  const applicationResumes = await RA.storage.getApplicationResumes();
   const scoredResume = applicationResume.text || resume.text;
   if (!scoredResume) throw new Error('No readable application resume or resume knowledge base uploaded yet.');
 
@@ -202,7 +204,7 @@ async function analyzeMatch({ jobDescription, jobTitle, company, applicationFact
     return { local, ai: null };
   }
 
-  const evidenceText = [resume.text, applicationResume.text].filter(Boolean).join('\n\n');
+  const evidenceText = [resume.text, ...applicationResumes.map((item) => item.text)].filter(Boolean).join('\n\n');
   const resumeExcerpt = RA.retrieve(evidenceText, local.missing.join(' '), 10000);
   const body = Object.assign(RA.claudeRequestConfig(settings, 8000, MATCH_SCHEMA), {
     system: [
@@ -245,12 +247,13 @@ async function analyzeMatch({ jobDescription, jobTitle, company, applicationFact
 }
 
 async function careerSources() {
-  const [settings, profile, resume, applicationResume] = await Promise.all([
-    RA.storage.getSettings(), RA.storage.getProfile(), RA.storage.getResume(), RA.storage.getApplicationResume()
+  const [settings, profile, resume, applicationResumes] = await Promise.all([
+    RA.storage.getSettings(), RA.storage.getProfile(), RA.storage.getResume(), RA.storage.getApplicationResumes()
   ]);
+  const applicationResume = await RA.storage.getActiveApplicationResume();
   if (!settings.apiKey) throw new Error('No API key set. Open the extension options and add one.');
   if (!applicationResume.text) throw new Error('The application resume has no readable text. Upload a text-based PDF or DOCX in Options.');
-  return { settings, profile, resume, applicationResume };
+  return { settings, profile, resume, applicationResume, applicationResumes };
 }
 
 function compactResumeDraft(draft) {
@@ -282,8 +285,8 @@ function compactResumeDraft(draft) {
 
 async function generateTailoredResume({ jobDescription, jobTitle, company }) {
   if (!jobDescription || jobDescription.trim().length < 40) throw new Error('No readable job description found.');
-  const { settings, profile, resume, applicationResume } = await careerSources();
-  const evidence = [applicationResume.text, resume.text].filter(Boolean).join('\n\n');
+  const { settings, profile, resume, applicationResume, applicationResumes } = await careerSources();
+  const evidence = [applicationResume.text, resume.text, ...applicationResumes.map((item) => item.text)].filter(Boolean).join('\n\n');
   let prior = null;
   let best = null;
   for (let attempt = 1; attempt <= 2; attempt++) {
@@ -320,8 +323,8 @@ async function generateTailoredResume({ jobDescription, jobTitle, company }) {
 
 async function generateCoverLetter({ jobDescription, jobTitle, company }) {
   if (!jobDescription || jobDescription.trim().length < 40) throw new Error('No readable job description found.');
-  const { settings, profile, resume, applicationResume } = await careerSources();
-  const evidence = [applicationResume.text, resume.text].filter(Boolean).join('\n\n');
+  const { settings, profile, resume, applicationResume, applicationResumes } = await careerSources();
+  const evidence = [applicationResume.text, resume.text, ...applicationResumes.map((item) => item.text)].filter(Boolean).join('\n\n');
   const body = Object.assign(RA.claudeRequestConfig(settings, 6000, COVER_LETTER_SCHEMA), {
     system: [
       'Write a concise, specific cover letter grounded only in the candidate evidence and supplied job description.',
@@ -375,13 +378,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           sendResponse(await testApiKey(msg.apiKey, msg.model));
           break;
         case 'GET_STATE': {
-          const [settings, profile, resume, applicationResume, bank] = await Promise.all([
+          const [settings, profile, resume, applicationResumes] = await Promise.all([
             RA.storage.getSettings(),
             RA.storage.getProfile(),
             RA.storage.getResume(),
-            RA.storage.getApplicationResume(),
-            RA.storage.getAnswerBank()
+            RA.storage.getApplicationResumes()
           ]);
+          const [applicationResume, bank] = await Promise.all([RA.storage.getActiveApplicationResume(), RA.storage.getAnswerBank()]);
           sendResponse({
             ok: true,
             hasKey: !!settings.apiKey,
@@ -393,6 +396,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               size: applicationResume.size,
               updatedAt: applicationResume.updatedAt
             },
+            applicationResumes: applicationResumes.map((item) => ({ id: item.id, fileName: item.fileName, size: item.size, updatedAt: item.updatedAt, textChars: (item.text || '').length })),
+            activeApplicationResumeId: applicationResume.id || '',
             bankSize: bank.length
           });
           break;

@@ -39,13 +39,14 @@
           It stays separate from the text knowledge base. Its extracted text is sent to Anthropic only when you explicitly request
           an AI answer, match explanation, tailored resume, or cover letter; the original file bytes are never sent.
           PDF or DOCX is recommended so profile facts can also be read from the file.
-          Legacy DOC files can be attached but not text-extracted. Maximum size: 5 MB.
+          Legacy DOC files can be attached but not text-extracted. Add up to five files (5 MB each); select which one is active for applications.
         </p>
         <div class="row">
           <input type="file" id="applicationResumeFile" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
           <button id="clearApplicationResume" class="danger" type="button">Remove</button>
         </div>
-        <div id="applicationResumeMeta" class="file-meta hint">No application resume saved.</div>
+        <div id="applicationResumeMeta" class="file-meta hint">No application resumes saved.</div>
+        <div id="applicationResumeList" class="resume-list"></div>
         <span id="applicationResumeStatus" class="hint"></span>
       </section>
 

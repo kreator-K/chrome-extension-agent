@@ -101,12 +101,46 @@
       const { resume } = await RA.storage.get('resume');
       return resume || { text: '', fileName: '', updatedAt: 0 };
     },
-    async getApplicationResume() {
-      const { applicationResume } = await RA.storage.get('applicationResume');
-      return applicationResume || {
-        fileName: '', mimeType: '', size: 0, dataUrl: '', text: '', updatedAt: 0
-      };
+    async getApplicationResumes() {
+      const stored = await RA.storage.get(['applicationResumes', 'applicationResume', 'activeApplicationResumeId']);
+      let list = Array.isArray(stored.applicationResumes) ? stored.applicationResumes.slice() : [];
+      if (!list.length && stored.applicationResume && (stored.applicationResume.fileName || stored.applicationResume.dataUrl || stored.applicationResume.text)) {
+        list = [Object.assign({ id: 'legacy-application-resume' }, stored.applicationResume)];
+      }
+      if (list.length && stored.applicationResume) {
+        const legacyIndex = list.findIndex((item) => item.fileName === stored.applicationResume.fileName) >= 0
+          ? list.findIndex((item) => item.fileName === stored.applicationResume.fileName) : 0;
+        list[legacyIndex] = Object.assign({}, stored.applicationResume, { id: list[legacyIndex].id });
+      }
+      return list.map((item, index) => Object.assign({}, item, { id: item.id || `application-resume-${index + 1}` }));
     },
+    async getActiveApplicationResume() {
+      const stored = await RA.storage.get(['applicationResumes', 'applicationResume', 'activeApplicationResumeId']);
+      let list = Array.isArray(stored.applicationResumes) ? stored.applicationResumes.slice() : [];
+      if (!list.length && stored.applicationResume && (stored.applicationResume.fileName || stored.applicationResume.dataUrl || stored.applicationResume.text)) {
+        list = [Object.assign({ id: 'legacy-application-resume' }, stored.applicationResume)];
+      }
+      if (list.length && stored.applicationResume) {
+        const legacyIndex = list.findIndex((item) => item.fileName === stored.applicationResume.fileName) >= 0
+          ? list.findIndex((item) => item.fileName === stored.applicationResume.fileName) : 0;
+        list[legacyIndex] = Object.assign({}, stored.applicationResume, { id: list[legacyIndex].id });
+      }
+      list = list.map((item, index) => Object.assign({}, item, { id: item.id || `application-resume-${index + 1}` }));
+      const active = list.find((item) => item.id === stored.activeApplicationResumeId) || list[0];
+      return active || { id: '', fileName: '', mimeType: '', size: 0, dataUrl: '', text: '', updatedAt: 0 };
+    },
+    async setApplicationResumes(list, activeId) {
+      const normalized = (Array.isArray(list) ? list : []).slice(0, 5).map((item, index) => Object.assign({}, item, { id: item.id || `application-resume-${index + 1}` }));
+      const active = normalized.find((item) => item.id === activeId) || normalized[0] || null;
+      await RA.storage.set({
+        applicationResumes: normalized,
+        activeApplicationResumeId: active ? active.id : '',
+        // Keep the legacy key synchronized for older content scripts and backups.
+        applicationResume: active || null
+      });
+      return normalized;
+    },
+    async getApplicationResume() { return RA.storage.getActiveApplicationResume(); },
     async getAnswerBank() {
       const { answerBank } = await RA.storage.get('answerBank');
       return Array.isArray(answerBank) ? answerBank : [];
