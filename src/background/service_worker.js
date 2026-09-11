@@ -98,6 +98,12 @@ const ACTION_VERB_DIRECTORY = [
   'Organizational: accelerated, arranged, cataloged, centralized, classified, compiled, completed, controlled, defined, executed, expanded, generated, implemented, launched, monitored, prepared, processed, recorded, reduced, selected, simplified, structured, systematized, validated, verified'
 ].join('\n');
 
+const RESUME_QUALITY_CHECKPOINTS = [
+  'DO: keep format and content consistent; make the document easy to read with balanced whitespace; use consistent spacing, capitalization, and restrained emphasis; order headings by importance; list experience in reverse chronological order; preserve known dates and flag gaps rather than inventing dates.',
+  'DO NOT: use first-person pronouns in resume bullets or summaries; use unexplained abbreviations; write bullets as a narrative story; use slang or colloquialisms; add pictures, age, gender, or references; start every line with a date.',
+  'These checkpoints apply to the resume document only. They do not prohibit first-person pronouns in the separate cover letter.'
+].join('\n');
+
 async function callClaude(settings, body) {
   const res = await fetch(API_URL, {
     method: 'POST',
@@ -315,6 +321,7 @@ async function generateTailoredResume({ jobDescription, jobTitle, company }) {
         'Keep every bullet concise, evidence-led, and results-oriented. Preserve all numerical claims exactly unless the evidence supplies a more precise version.',
         'Use the action-verb directory below to replace weak or passive openings when the source evidence supports the stronger verb. Choose the category that matches the actual work; do not rotate verbs mechanically, exaggerate ownership, or add an action that is not documented.',
         '=== ACTION-VERB DIRECTORY ===', ACTION_VERB_DIRECTORY,
+        '=== RESUME QUALITY CHECKPOINTS ===', RESUME_QUALITY_CHECKPOINTS,
         'Keep roughly the same number of bullets per role as the source. The DOCX renderer preserves the visual format; your task is content only.',
         'Technical Proficiency should contain only demonstrated skills. WhatsApp and Telegram are product channels, not skills.',
         '', '=== PROFILE ===', RA.profileSummary(profile),

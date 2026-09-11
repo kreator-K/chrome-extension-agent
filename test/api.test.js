@@ -128,6 +128,10 @@ function send(message) {
   assert.match(resumePrompt, /ACTION-VERB DIRECTORY/);
   assert.match(resumePrompt, /spearheaded/);
   assert.match(resumePrompt, /do not rotate verbs mechanically/i);
+  assert.match(resumePrompt, /RESUME QUALITY CHECKPOINTS/);
+  assert.match(resumePrompt, /first-person pronouns/i);
+  assert.match(resumePrompt, /reverse chronological order/i);
+  assert.match(resumePrompt, /flag gaps rather than inventing dates/i);
 
   for (const request of requests) {
     assert.ok(!Object.prototype.hasOwnProperty.call(request.body, 'fallbacks'));

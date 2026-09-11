@@ -64,6 +64,12 @@ From the match panel you can also:
 - **Download tailored resume (.docx)** — creates an editable Word document using the source resume's Letter layout, compact Calibri typography, centered section headings, aligned dates/locations, hyperlinks and real bullets.
 - **Create cover letter** — creates a concise JD-specific letter grounded in the same resume and knowledge-base evidence, with a separate DOCX download.
 
+Tailored resume generation also applies a quality checkpoint pass: consistent
+formatting and whitespace, readable heading hierarchy, reverse-chronological
+experience, evidence-grounded action verbs, no resume first-person pronouns,
+and no invented dates or personal details. Cover letters intentionally remain
+first-person documents.
+
 ## Install
 
 1. Clone this repo.
