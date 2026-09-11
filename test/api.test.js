@@ -117,6 +117,11 @@ function send(message) {
   });
   assert.strictEqual(cover.ok, true);
   assert.strictEqual(cover.result.paragraphs.length, 3);
+  const coverPrompt = requests[requests.length - 1].body.system;
+  assert.match(coverPrompt, /opening paragraph/i);
+  assert.match(coverPrompt, /one or two middle paragraphs/i);
+  assert.match(coverPrompt, /thanks the reader/i);
+  assert.match(coverPrompt, /Never invent a recipient name/i);
 
   for (const request of requests) {
     assert.ok(!Object.prototype.hasOwnProperty.call(request.body, 'fallbacks'));

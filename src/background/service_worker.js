@@ -327,10 +327,11 @@ async function generateCoverLetter({ jobDescription, jobTitle, company }) {
   const evidence = [applicationResume.text, resume.text, ...applicationResumes.map((item) => item.text)].filter(Boolean).join('\n\n');
   const body = Object.assign(RA.claudeRequestConfig(settings, 6000, COVER_LETTER_SCHEMA), {
     system: [
-      'Write a concise, specific cover letter grounded only in the candidate evidence and supplied job description.',
-      'Never invent facts, company research, motivations, metrics, skills, or experience.',
-      'Use three or four short paragraphs: role-specific opening, two evidence connections, and a direct close.',
-      'Stay under 400 words. Do not repeat the resume or use generic enthusiasm, buzzwords, headings, or bullet lists.',
+      'Write a polished, concise cover letter grounded only in the candidate evidence and supplied job description.',
+      'Follow this structure exactly: (1) opening paragraph that clearly states the role, why the candidate is writing, and—only when supported—how they heard about it plus two or three specific fit reasons; (2) one or two middle paragraphs explaining interest in this employer/work and connecting one or two concrete candidate examples to the job; (3) closing paragraph that reiterates interest, states the contribution the candidate can make, thanks the reader, and looks forward to discussing the role.',
+      'Do not repeat the entire resume. Select the strongest relevant evidence and explain the connection to the job in a confident, natural voice.',
+      'Never invent a recipient name, address, company research, motivations, metrics, skills, or experience. If no contact name is supplied, use the salutation "Dear Hiring Team,". Do not claim how the candidate heard about the role unless the evidence or page context supplies it.',
+      'Keep three or four short paragraphs and stay under 350 words. Do not use generic enthusiasm, buzzwords, headings, labels such as "Opening paragraph", or bullet lists.',
       '', '=== PROFILE ===', RA.profileSummary(profile),
       '', '=== CANDIDATE EVIDENCE ===', RA.retrieve(evidence, jobDescription, 12000)
     ].join('\n'),
