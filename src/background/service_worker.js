@@ -83,6 +83,21 @@ const COVER_LETTER_SCHEMA = {
   additionalProperties: false
 };
 
+// User-supplied action-verb directory. It is a vocabulary aid, not a license
+// to inflate a claim: the model may use a verb only when the source evidence
+// supports the underlying action.
+const ACTION_VERB_DIRECTORY = [
+  'Leadership: accomplished, achieved, administered, analyzed, assigned, coordinated, delegated, developed, directed, evaluated, executed, improved, increased, led, orchestrated, organized, oversaw, prioritized, produced, recommended, reorganized, reviewed, spearheaded, strengthened, supervised, surpassed',
+  'Communication: addressed, authored, collaborated, delivered, documented, drafted, edited, formulated, influenced, interpreted, liaised, mediated, negotiated, persuaded, presented, reconciled, reported, synthesized, translated, wrote',
+  'Research: clarified, collected, conducted, diagnosed, discovered, evaluated, examined, extracted, identified, inspected, investigated, modeled, resolved, reviewed, summarized, surveyed, systematized, tested',
+  'Technical: assembled, built, calculated, computed, designed, devised, engineered, installed, maintained, operated, optimized, overhauled, programmed, solved, standardized, streamlined, upgraded',
+  'Teaching: advised, coached, communicated, coordinated, clarified, demystified, enabled, evaluated, explained, facilitated, guided, informed, instructed, taught, trained',
+  'Quantitative: allocated, analyzed, appraised, audited, balanced, budgeted, calculated, forecasted, managed, maximized, minimized, planned, projected, researched',
+  'Creative: conceived, conceptualized, created, customized, designed, established, founded, initiated, integrated, introduced, invented, originated, published, redesigned, revised, revitalized, shaped, visualized',
+  'Helping: assessed, assisted, counseled, demonstrated, diagnosed, educated, enhanced, expedited, facilitated, guided, motivated, proposed, provided, represented, served, supported',
+  'Organizational: accelerated, arranged, cataloged, centralized, classified, compiled, completed, controlled, defined, executed, expanded, generated, implemented, launched, monitored, prepared, processed, recorded, reduced, selected, simplified, structured, systematized, validated, verified'
+].join('\n');
+
 async function callClaude(settings, body) {
   const res = await fetch(API_URL, {
     method: 'POST',
@@ -298,6 +313,8 @@ async function generateTailoredResume({ jobDescription, jobTitle, company }) {
         'Never invent or upgrade facts, titles, dates, metrics, employers, degrees, skills, tools, or scope. Use the knowledge base only to clarify or reword facts that are genuinely supported.',
         'Use exact job-description terminology only where an existing fact supports it. Do not keyword-stuff.',
         'Keep every bullet concise, evidence-led, and results-oriented. Preserve all numerical claims exactly unless the evidence supplies a more precise version.',
+        'Use the action-verb directory below to replace weak or passive openings when the source evidence supports the stronger verb. Choose the category that matches the actual work; do not rotate verbs mechanically, exaggerate ownership, or add an action that is not documented.',
+        '=== ACTION-VERB DIRECTORY ===', ACTION_VERB_DIRECTORY,
         'Keep roughly the same number of bullets per role as the source. The DOCX renderer preserves the visual format; your task is content only.',
         'Technical Proficiency should contain only demonstrated skills. WhatsApp and Telegram are product channels, not skills.',
         '', '=== PROFILE ===', RA.profileSummary(profile),
@@ -330,6 +347,7 @@ async function generateCoverLetter({ jobDescription, jobTitle, company }) {
       'Write a polished, concise cover letter grounded only in the candidate evidence and supplied job description.',
       'Follow this structure exactly: (1) opening paragraph that clearly states the role, why the candidate is writing, and—only when supported—how they heard about it plus two or three specific fit reasons; (2) one or two middle paragraphs explaining interest in this employer/work and connecting one or two concrete candidate examples to the job; (3) closing paragraph that reiterates interest, states the contribution the candidate can make, thanks the reader, and looks forward to discussing the role.',
       'Do not repeat the entire resume. Select the strongest relevant evidence and explain the connection to the job in a confident, natural voice.',
+      'Use active, specific verbs naturally (for example, led, coordinated, analyzed, built, optimized, facilitated, or delivered) when the evidence supports them; do not turn the letter into a list of resume keywords.',
       'Never invent a recipient name, address, company research, motivations, metrics, skills, or experience. If no contact name is supplied, use the salutation "Dear Hiring Team,". Do not claim how the candidate heard about the role unless the evidence or page context supplies it.',
       'Keep three or four short paragraphs and stay under 350 words. Do not use generic enthusiasm, buzzwords, headings, labels such as "Opening paragraph", or bullet lists.',
       '', '=== PROFILE ===', RA.profileSummary(profile),

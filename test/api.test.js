@@ -122,6 +122,12 @@ function send(message) {
   assert.match(coverPrompt, /one or two middle paragraphs/i);
   assert.match(coverPrompt, /thanks the reader/i);
   assert.match(coverPrompt, /Never invent a recipient name/i);
+  assert.match(coverPrompt, /active, specific verbs naturally/i);
+
+  const resumePrompt = requests.find((request) => request.body.output_config && request.body.output_config.format && request.body.output_config.format.schema && request.body.output_config.format.schema.properties && request.body.output_config.format.schema.properties.education).body.system;
+  assert.match(resumePrompt, /ACTION-VERB DIRECTORY/);
+  assert.match(resumePrompt, /spearheaded/);
+  assert.match(resumePrompt, /do not rotate verbs mechanically/i);
 
   for (const request of requests) {
     assert.ok(!Object.prototype.hasOwnProperty.call(request.body, 'fallbacks'));
