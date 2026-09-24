@@ -288,7 +288,11 @@
     const active = document.activeElement;
     const conversation = Array.from(document.querySelectorAll('textarea, [contenteditable="true"]'))
       .map((el) => String(el.value || el.innerText || '').trim()).filter(Boolean).slice(0, 3).join('\n\n');
-    const visibleText = String(document.body && (document.body.innerText || '') || '').replace(/\s+/g, ' ').trim();
+    const visibleText = pickBlockText([
+      '[data-testid="profile-card"]', '[data-testid="post-content"]', '[data-testid="conversation"]',
+      '.feed-shared-update-v2', '.msg-s-message-list-content', '.conversation',
+      '[class*="profile-card"]', '[class*="post-content"]', '[class*="conversation"]'
+    ], 3500);
     return {
       personName: pickText(['h1', '[data-testid*="name"]', '[class*="profile-name"]', '[class*="person-name"]'], 160),
       role: pickText(['[data-testid*="headline"]', '[class*="headline"]', '[class*="job-title"]', 'h2'], 220),
