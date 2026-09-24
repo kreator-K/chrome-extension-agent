@@ -146,6 +146,36 @@ const CONTENT = path.join(__dirname, '..', 'src', 'content', 'content.js');
   assert.match(perQuestion.badge, /^AI/);
   assert.strictEqual(perQuestion.button, 'Regenerate Personalized Answer');
 
+  const networking = await page.evaluate(() => {
+    const root = document.getElementById('ra-host').shadowRoot;
+    root.querySelector('[data-act="modenetwork"]').click();
+    const intent = root.querySelector('[data-networking="intent"]');
+    const angle = root.querySelector('[data-networking="angle"]');
+    intent.value = 'Potential Cofounder';
+    intent.dispatchEvent(new Event('change', { bubbles: true }));
+    const updatedAngle = root.querySelector('[data-networking="angle"]');
+    return {
+      intents: Array.from(root.querySelectorAll('[data-networking="intent"] option')).map((o) => o.textContent),
+      cofounderAngles: updatedAngle ? Array.from(updatedAngle.options).map((o) => o.textContent) : [],
+      hasCustomInput: !!root.querySelector('[data-networking="custom"]')
+    };
+  });
+  assert.deepStrictEqual(networking.intents, ['Referral', 'Potential Cofounder', 'Guidance', 'Resume Review', 'Custom']);
+  assert.deepStrictEqual(networking.cofounderAngles, ['Complementary Skills', 'Specific Work / Experience', 'Explore Fit First', 'Custom']);
+  assert.strictEqual(networking.hasCustomInput, false);
+  const customNetworking = await page.evaluate(() => {
+    const root = document.getElementById('ra-host').shadowRoot;
+    const intent = root.querySelector('[data-networking="intent"]');
+    intent.value = 'Custom';
+    intent.dispatchEvent(new Event('change', { bubbles: true }));
+    return {
+      customInput: root.querySelector('[data-networking="custom"]')?.getAttribute('placeholder'),
+      angle: !!root.querySelector('[data-networking="angle"]')
+    };
+  });
+  assert.match(customNetworking.customInput, /objective/i);
+  assert.strictEqual(customNetworking.angle, false);
+
   await browser.close();
   console.log('\nPanel match-score rendering passed');
 })().catch((err) => { console.error(err); process.exit(1); });

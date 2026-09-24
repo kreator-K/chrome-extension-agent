@@ -133,11 +133,16 @@ function send(message) {
     type: 'GENERATE_NETWORKING',
     payload: {
       intent: 'Ask for Advice',
+      angle: 'Career Guidance',
       context: { personName: 'John Smith', role: 'Product Manager', company: 'Stripe', visibleContent: 'Product leadership and platform work.' }
     }
   });
   assert.strictEqual(networking.ok, true);
   assert.match(networking.result.message, /shared product background/);
+  const networkingPrompt = requests[requests.length - 1].body.system;
+  assert.match(networkingPrompt, /NETWORKING INTENT/);
+  assert.match(networkingPrompt, /Ask for Advice/);
+  assert.match(networkingPrompt, /Career Guidance/);
 
   const resumePrompt = requests.find((request) => request.body.output_config && request.body.output_config.format && request.body.output_config.format.schema && request.body.output_config.format.schema.properties && request.body.output_config.format.schema.properties.education).body.system;
   assert.match(resumePrompt, /ACTION-VERB DIRECTORY/);

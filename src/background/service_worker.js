@@ -213,18 +213,18 @@ async function generateAnswers({ questions, pageContext }) {
   });
 }
 
-async function generateNetworking({ intent, customIntent, context }) {
+async function generateNetworking({ intent, angle, customIntent, context }) {
   const settings = await RA.storage.getSettings();
   if (!settings.apiKey) throw new Error('No API key set. Open the extension options and add one.');
   const profile = await RA.storage.getProfile();
   const resume = await RA.storage.getResume();
   const applicationResumes = await RA.storage.getApplicationResumes();
-  const query = [intent, customIntent, context && context.personName, context && context.role, context && context.company, context && context.visibleContent].filter(Boolean).join(' ');
+  const query = [intent, angle, customIntent, context && context.personName, context && context.role, context && context.company, context && context.headline, context && context.visibleContent, context && context.conversation].filter(Boolean).join(' ');
   const evidenceText = [resume.text, ...applicationResumes.map((item) => item.text)].filter(Boolean).join('\n\n');
   const evidence = RA.retrieve(evidenceText, query, 10000);
   if (!evidence && !RA.profileSummary(profile)) throw new Error('No readable knowledge base or resume context is available.');
   const body = Object.assign(RA.claudeRequestConfig(settings, 4000, NETWORKING_SCHEMA), {
-    system: RA.buildNetworkingPrompt(settings, profile, evidence, Object.assign({}, context, { customIntent }), intent),
+    system: RA.buildNetworkingPrompt(settings, profile, evidence, Object.assign({}, context, { customIntent }), intent, angle),
     messages: [{ role: 'user', content: 'Generate the personalized networking message now.' }]
   });
   const parsed = parsedStructuredResponse(await callClaude(settings, body), 'networking message');

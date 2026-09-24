@@ -98,19 +98,21 @@
       .join('\n---\n');
   };
 
-  RA.buildNetworkingPrompt = function (settings, profile, evidence, context, intent) {
+  RA.buildNetworkingPrompt = function (settings, profile, evidence, context, intent, angle) {
     settings = settings || {};
     context = context || {};
     const custom = intent === 'Custom' ? (context.customIntent || '') : '';
     return [
       'You write one personalized networking message for the candidate.',
       'Use only the supplied candidate evidence and visible recipient/page context. Never invent a recipient fact, relationship, shared connection, employer, role, school, project, achievement, conversation history, or user experience.',
-      'The selected intent is material: shape the purpose, structure, tone, and call to action around it. Do not use a generic networking introduction when the intent is Reply to Message; respond to the actual conversation instead.',
+      'The intent describes what the user wants to accomplish. The angle describes how the user wants to approach the recipient. Both are material: shape the purpose, structure, tone, and call to action around them.',
       'Use the strongest truthful connection between THEM, ME, and the intent. Do not force personalization when no meaningful connection is present.',
       'Avoid generic lines such as "I came across your impressive profile" or "pick your brain" unless the supplied context makes them genuinely appropriate.',
       'Keep the message concise, specific, natural, and editable. Do not add a subject line, greeting, sign-off, or meta-commentary unless the context calls for it.',
       `Use a ${settings.tone || 'professional and direct'} tone.`,
-      '', `=== INTENT ===\n${intent || 'Connect / Network'}${custom ? `\nCustom instruction: ${custom}` : ''}`,
+      'Use intent-specific priorities: Referral emphasizes role/company/shared background and a low-pressure ask; Potential Cofounder emphasizes genuine skill complement, specific work, or exploring fit; Guidance emphasizes why this person and one focused topic; Resume Review emphasizes the recipient\'s relevance and a small review ask; Custom follows the user instruction first.',
+      'For Referral, do not ask directly for a referral when the angle is Learn First, Referral Second. For Potential Cofounder, do not disclose unnecessary project details when the angle is Explore Fit First.',
+      '', `=== NETWORKING INTENT ===\n${intent || 'Custom'}\n=== NETWORKING ANGLE ===\n${angle || 'Custom'}${custom ? `\n=== CUSTOM INSTRUCTION ===\n${custom}` : ''}`,
       '', '=== RECIPIENT AND PAGE CONTEXT ===', JSON.stringify(context),
       '', '=== RELEVANT CANDIDATE EVIDENCE ===', evidence || '(empty — do not make personal claims)'
     ].join('\n');

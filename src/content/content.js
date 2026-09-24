@@ -10,8 +10,18 @@
     fields: [], answers: new Map(), panel: null, shadow: null, busy: false,
     match: null, matchAi: null, matchBusy: false, jdOverride: '',
     careerBusy: false, tailoredResume: null, coverLetter: null,
-    mode: 'job', networking: { intent: 'Connect / Network', customIntent: '', result: '', basis: '', busy: false }
+    mode: 'job', networking: { intent: 'Referral', angle: 'Direct Referral', customIntent: '', result: '', basis: '', busy: false }
   };
+
+  const NETWORKING_ANGLES = {
+    'Referral': ['Direct Referral', 'Learn First, Referral Second', 'Shared Background', 'Specific Role', 'Custom'],
+    'Potential Cofounder': ['Complementary Skills', 'Specific Work / Experience', 'Explore Fit First', 'Custom'],
+    'Guidance': ['Career Guidance', 'Industry Guidance', 'Role / Company Guidance', 'Founder / Startup Guidance', 'Technical / Product Guidance', 'Career Transition', 'Custom'],
+    'Resume Review': ['General Review', 'Role-Specific Review', 'Industry-Specific Review', 'Career Positioning', 'Specific Section', 'Custom'],
+    'Custom': []
+  };
+
+  function networkingAngles(intent) { return NETWORKING_ANGLES[intent] || []; }
 
   // Reloading/updating an extension invalidates content scripts that were
   // already injected into open tabs. Chrome throws synchronously in that old
@@ -312,19 +322,23 @@
     shadow.querySelector('[data-act="modenetwork"]').classList.toggle('active', true);
     const body = shadow.querySelector('.body');
     const n = state.networking;
+    const angles = networkingAngles(n.intent);
+    if (n.intent !== 'Custom' && !angles.includes(n.angle)) n.angle = angles[0] || '';
     body.innerHTML = `<div class="networking">
       <div class="q">Networking</div>
       <label class="hint">Intent<select data-networking="intent">
-        ${['Connect / Network', 'Ask for Advice', 'Ask for Referral', 'Recruiter Outreach', 'Cofounder Outreach', 'Sales / Business Outreach', 'Follow Up', 'Reply to Message', 'Custom'].map((v) => `<option${v === n.intent ? ' selected' : ''}>${v}</option>`).join('')}
+        ${Object.keys(NETWORKING_ANGLES).map((v) => `<option${v === n.intent ? ' selected' : ''}>${v}</option>`).join('')}
       </select></label>
-      ${n.intent === 'Custom' ? '<label class="hint">What are you trying to do?<input data-networking="custom" value="" placeholder="Describe your objective…" /></label>' : ''}
+      ${n.intent !== 'Custom' ? `<label class="hint">Angle<select data-networking="angle">${angles.map((v) => `<option${v === n.angle ? ' selected' : ''}>${v}</option>`).join('')}</select></label>` : '<label class="hint">What do you want this message to achieve?<input data-networking="custom" value="" placeholder="Describe your objective…" /></label>'}
       <div class="basis">Uses visible recipient/page context plus your existing profile, knowledge base, resumes, and saved answers. Review before inserting.</div>
       <textarea data-networking="result" rows="8" placeholder="Your personalized message will appear here…">${escapeHtml(n.result)}</textarea>
       <div class="row"><button data-act="networkgenerate" class="primary" ${n.busy ? 'disabled' : ''}>${n.busy ? 'Generating…' : 'Generate Message'}</button><button data-act="networkinsert" ${n.result ? '' : 'disabled'}>Insert</button></div>
       <div class="basis">${escapeHtml(n.basis || '')}</div>
     </div>`;
     const custom = body.querySelector('[data-networking="custom"]'); if (custom) custom.value = n.customIntent;
-    body.querySelector('[data-networking="intent"]').addEventListener('change', (ev) => { n.intent = ev.target.value; n.result = ''; renderNetworking(); });
+    body.querySelector('[data-networking="intent"]').addEventListener('change', (ev) => { n.intent = ev.target.value; n.angle = networkingAngles(n.intent)[0] || ''; n.result = ''; renderNetworking(); });
+    const angle = body.querySelector('[data-networking="angle"]');
+    if (angle) angle.addEventListener('change', (ev) => { n.angle = ev.target.value; n.result = ''; renderNetworking(); });
     const result = body.querySelector('[data-networking="result"]');
     result.addEventListener('input', () => { n.result = result.value; });
     if (custom) custom.addEventListener('input', () => { n.customIntent = custom.value; });
@@ -335,7 +349,7 @@
     if (n.intent === 'Custom' && !n.customIntent.trim()) { setStatus('Describe what you are trying to do first.', true); return; }
     n.busy = true; n.result = ''; renderNetworking(); setStatus('Generating a personalized networking message…');
     try {
-      const response = await sendRuntimeMessage({ type: 'GENERATE_NETWORKING', payload: { intent: n.intent, customIntent: n.customIntent, context: networkingContext() } });
+      const response = await sendRuntimeMessage({ type: 'GENERATE_NETWORKING', payload: { intent: n.intent, angle: n.angle, customIntent: n.customIntent, context: networkingContext() } });
       if (!response || !response.ok) { setStatus((response && response.error) || 'Could not generate the networking message.', true); return; }
       n.result = response.result.message || ''; n.basis = response.result.basis || ''; renderNetworking();
       setStatus(n.result ? 'Review the message, then choose Insert.' : 'No grounded message was returned.', !n.result);
