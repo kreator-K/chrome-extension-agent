@@ -311,7 +311,7 @@
         : '';
       const isFile = f.kind === 'file';
       const canGenerate = canGenerateWithAi(f);
-      const generateLabel = a && a.value ? 'Regenerate with AI' : 'Generate with AI';
+      const generateLabel = a && a.value ? 'Regenerate Personalized Answer' : 'Generate Personalized Answer';
       item.innerHTML = `
         <div class="q"></div>
         <div class="meta"><span class="badge ${badge.cls}"></span></div>
@@ -319,7 +319,7 @@
         ${optionHint}
         <div class="basis"></div>
         <div class="row">
-          ${canGenerate ? `<button data-act="generate" class="ai-one">${generateLabel}</button>` : ''}
+          ${canGenerate ? `<button data-act="generate" class="ai-one" title="Generate a grounded answer from your profile, resume, knowledge base, saved answers, and job context">${generateLabel}</button>` : ''}
           <button data-act="fill">${isFile ? 'Attach resume' : 'Fill'}</button>
           <button data-act="show">Show field</button>
           ${isFile ? '' : '<button data-act="save">Save answer</button>'}
@@ -500,7 +500,7 @@
     try {
       const response = await askBackground([field]);
       if (!response || !response.ok) {
-        if (button) { button.disabled = false; button.textContent = 'Generate with AI'; }
+        if (button) { button.disabled = false; button.textContent = 'Generate Personalized Answer'; }
         setStatus((response && response.error) || 'Could not generate an answer.', true);
         return;
       }
@@ -515,7 +515,7 @@
           render();
         } else if (button) {
           button.disabled = false;
-          button.textContent = 'Regenerate with AI';
+          button.textContent = 'Regenerate Personalized Answer';
         }
         setStatus((generated && generated.basis) || 'Claude did not return a grounded answer for this question.', true);
         return;

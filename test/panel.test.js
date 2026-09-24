@@ -144,7 +144,7 @@ const CONTENT = path.join(__dirname, '..', 'src', 'content', 'content.js');
   assert.strictEqual(perQuestion.found, true, 'unanswered prose question has a per-question AI button');
   assert.match(perQuestion.answer, /reliable Python platforms/);
   assert.match(perQuestion.badge, /^AI/);
-  assert.strictEqual(perQuestion.button, 'Regenerate with AI');
+  assert.strictEqual(perQuestion.button, 'Regenerate Personalized Answer');
 
   await browser.close();
   console.log('\nPanel match-score rendering passed');
