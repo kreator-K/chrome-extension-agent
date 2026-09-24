@@ -9,7 +9,8 @@
   let state = {
     fields: [], answers: new Map(), panel: null, shadow: null, busy: false,
     match: null, matchAi: null, matchBusy: false, jdOverride: '',
-    careerBusy: false, tailoredResume: null, coverLetter: null
+    careerBusy: false, tailoredResume: null, coverLetter: null,
+    mode: 'job', networking: { intent: 'Connect / Network', customIntent: '', result: '', basis: '', busy: false }
   };
 
   // Reloading/updating an extension invalidates content scripts that were
@@ -187,6 +188,13 @@
   header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #f6f7f9; border-bottom: 1px solid #e3e6ea;
     position: sticky; top: 0; z-index: 2; flex: none; }
   header h1 { font-size: 13px; margin: 0; font-weight: 600; flex: 1; }
+  .mode-switch { display: flex; gap: 3px; }
+  .mode-switch button { font-size: 11px; padding: 4px 6px; }
+  .mode-switch button.active { background: #1a63d8; border-color: #1a63d8; color: #fff; }
+  .networking { padding: 12px; display: grid; gap: 10px; }
+  .networking .q { font-weight: 600; font-size: 15px; }
+  .networking label { display: grid; gap: 4px; }
+  .networking select, .networking input, .networking textarea { width: 100%; box-sizing: border-box; font: inherit; padding: 7px; border: 1px solid #c8ccd2; border-radius: 6px; }
   button { font: inherit; border-radius: 6px; border: 1px solid #c8ccd2; background: #fff; padding: 5px 9px; cursor: pointer; }
   button:hover { background: #f1f3f5; }
   button.primary { background: #1a63d8; border-color: #1a63d8; color: #fff; }
@@ -247,7 +255,8 @@
     wrap.className = 'wrap';
     wrap.innerHTML = `
       <header>
-        <h1>Resume Autofill</h1>
+        <h1>Fill-Up</h1>
+        <div class="mode-switch"><button data-act="modejob" class="active">Job Application</button><button data-act="modenetwork">Networking</button></div>
         <button data-act="rescan">Rescan</button>
         <button data-act="close" title="Close">✕</button>
       </header>
@@ -275,6 +284,72 @@
     }
   }
 
+  function networkingContext() {
+    const active = document.activeElement;
+    const conversation = Array.from(document.querySelectorAll('textarea, [contenteditable="true"]'))
+      .map((el) => String(el.value || el.innerText || '').trim()).filter(Boolean).slice(0, 3).join('\n\n');
+    const visibleText = String(document.body && (document.body.innerText || '') || '').replace(/\s+/g, ' ').trim();
+    return {
+      personName: pickText(['h1', '[data-testid*="name"]', '[class*="profile-name"]', '[class*="person-name"]'], 160),
+      role: pickText(['[data-testid*="headline"]', '[class*="headline"]', '[class*="job-title"]', 'h2'], 220),
+      company: pickText(['[data-testid*="company"]', '[class*="company-name"]', '[class*="company"]'], 160),
+      headline: pickText(['[data-testid*="headline"]', '[class*="headline"]'], 300),
+      pageTitle: document.title,
+      url: location.href,
+      conversation,
+      visibleContent: visibleText.slice(0, 5000),
+      activeField: !!(active && (active.matches('textarea, input[type="text"], input[type="search"]') || active.isContentEditable))
+    };
+  }
+
+  function renderNetworking() {
+    const shadow = ensurePanel();
+    shadow.querySelector('[data-act="modejob"]').classList.toggle('active', false);
+    shadow.querySelector('[data-act="modenetwork"]').classList.toggle('active', true);
+    const body = shadow.querySelector('.body');
+    const n = state.networking;
+    body.innerHTML = `<div class="networking">
+      <div class="q">Networking</div>
+      <label class="hint">Intent<select data-networking="intent">
+        ${['Connect / Network', 'Ask for Advice', 'Ask for Referral', 'Recruiter Outreach', 'Cofounder Outreach', 'Sales / Business Outreach', 'Follow Up', 'Reply to Message', 'Custom'].map((v) => `<option${v === n.intent ? ' selected' : ''}>${v}</option>`).join('')}
+      </select></label>
+      ${n.intent === 'Custom' ? '<label class="hint">What are you trying to do?<input data-networking="custom" value="" placeholder="Describe your objective…" /></label>' : ''}
+      <div class="basis">Uses visible recipient/page context plus your existing profile, knowledge base, resumes, and saved answers. Review before inserting.</div>
+      <textarea data-networking="result" rows="8" placeholder="Your personalized message will appear here…">${escapeHtml(n.result)}</textarea>
+      <div class="row"><button data-act="networkgenerate" class="primary" ${n.busy ? 'disabled' : ''}>${n.busy ? 'Generating…' : 'Generate Message'}</button><button data-act="networkinsert" ${n.result ? '' : 'disabled'}>Insert</button></div>
+      <div class="basis">${escapeHtml(n.basis || '')}</div>
+    </div>`;
+    const custom = body.querySelector('[data-networking="custom"]'); if (custom) custom.value = n.customIntent;
+    body.querySelector('[data-networking="intent"]').addEventListener('change', (ev) => { n.intent = ev.target.value; n.result = ''; renderNetworking(); });
+    const result = body.querySelector('[data-networking="result"]');
+    result.addEventListener('input', () => { n.result = result.value; });
+    if (custom) custom.addEventListener('input', () => { n.customIntent = custom.value; });
+  }
+
+  async function generateNetworking() {
+    const n = state.networking;
+    if (n.intent === 'Custom' && !n.customIntent.trim()) { setStatus('Describe what you are trying to do first.', true); return; }
+    n.busy = true; n.result = ''; renderNetworking(); setStatus('Generating a personalized networking message…');
+    try {
+      const response = await sendRuntimeMessage({ type: 'GENERATE_NETWORKING', payload: { intent: n.intent, customIntent: n.customIntent, context: networkingContext() } });
+      if (!response || !response.ok) { setStatus((response && response.error) || 'Could not generate the networking message.', true); return; }
+      n.result = response.result.message || ''; n.basis = response.result.basis || ''; renderNetworking();
+      setStatus(n.result ? 'Review the message, then choose Insert.' : 'No grounded message was returned.', !n.result);
+    } finally { n.busy = false; renderNetworking(); }
+  }
+
+  function insertNetworking() {
+    const value = state.networking.result.trim();
+    if (!value) return;
+    const active = document.activeElement && (document.activeElement.matches('textarea, input[type="text"], input[type="search"]') || document.activeElement.isContentEditable)
+      ? document.activeElement : document.querySelector('textarea, [contenteditable="true"], input[type="text"], input[type="search"]');
+    if (!active) { setStatus('No editable text field found on this page.', true); return; }
+    if (active.isContentEditable) active.textContent = value;
+    else { const proto = active instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype; const setter = Object.getOwnPropertyDescriptor(proto, 'value'); if (setter && setter.set) setter.set.call(active, value); else active.value = value; }
+    active.dispatchEvent(new Event('input', { bubbles: true })); active.dispatchEvent(new Event('change', { bubbles: true }));
+    setStatus('Inserted. Review it before sending.', false);
+  }
+
   function badgeFor(a) {
     if (!a || !a.value) return { cls: 'none', text: 'no answer' };
     if (a.source === 'saved') return { cls: 'saved', text: 'saved answer' };
@@ -294,6 +369,9 @@
 
   function render() {
     const shadow = ensurePanel();
+    shadow.querySelector('[data-act="modejob"]').classList.toggle('active', true);
+    shadow.querySelector('[data-act="modenetwork"]').classList.toggle('active', false);
+    if (state.mode === 'networking') { renderNetworking(); return; }
     const body = shadow.querySelector('.body');
     if (!state.fields.length) {
       body.innerHTML = '<div class="empty">No application questions found on this page.</div>';
@@ -423,6 +501,10 @@
     const act = btn.dataset.act;
     const item = btn.closest('.item');
 
+    if (act === 'modejob') { state.mode = 'job'; btn.classList.add('active'); await scan(); return; }
+    if (act === 'modenetwork') { state.mode = 'networking'; renderNetworking(); return; }
+    if (act === 'networkgenerate') { await generateNetworking(); return; }
+    if (act === 'networkinsert') { insertNetworking(); return; }
     if (act === 'close') { state.panel.remove(); state.panel = null; return; }
     if (act === 'rescan') { await scan(); return; }
     if (act === 'ai') { await runAi(); return; }

@@ -97,4 +97,22 @@
       })
       .join('\n---\n');
   };
+
+  RA.buildNetworkingPrompt = function (settings, profile, evidence, context, intent) {
+    settings = settings || {};
+    context = context || {};
+    const custom = intent === 'Custom' ? (context.customIntent || '') : '';
+    return [
+      'You write one personalized networking message for the candidate.',
+      'Use only the supplied candidate evidence and visible recipient/page context. Never invent a recipient fact, relationship, shared connection, employer, role, school, project, achievement, conversation history, or user experience.',
+      'The selected intent is material: shape the purpose, structure, tone, and call to action around it. Do not use a generic networking introduction when the intent is Reply to Message; respond to the actual conversation instead.',
+      'Use the strongest truthful connection between THEM, ME, and the intent. Do not force personalization when no meaningful connection is present.',
+      'Avoid generic lines such as "I came across your impressive profile" or "pick your brain" unless the supplied context makes them genuinely appropriate.',
+      'Keep the message concise, specific, natural, and editable. Do not add a subject line, greeting, sign-off, or meta-commentary unless the context calls for it.',
+      `Use a ${settings.tone || 'professional and direct'} tone.`,
+      '', `=== INTENT ===\n${intent || 'Connect / Network'}${custom ? `\nCustom instruction: ${custom}` : ''}`,
+      '', '=== RECIPIENT AND PAGE CONTEXT ===', JSON.stringify(context),
+      '', '=== RELEVANT CANDIDATE EVIDENCE ===', evidence || '(empty — do not make personal claims)'
+    ].join('\n');
+  };
 })(typeof self !== 'undefined' ? self : this);

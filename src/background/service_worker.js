@@ -83,6 +83,17 @@ const COVER_LETTER_SCHEMA = {
   additionalProperties: false
 };
 
+const NETWORKING_SCHEMA = {
+  type: 'object',
+  properties: {
+    message: { type: 'string' },
+    basis: { type: 'string' },
+    confidence: { type: 'number' }
+  },
+  required: ['message', 'basis', 'confidence'],
+  additionalProperties: false
+};
+
 // User-supplied action-verb directory. It is a vocabulary aid, not a license
 // to inflate a claim: the model may use a verb only when the source evidence
 // supports the underlying action.
@@ -200,6 +211,28 @@ async function generateAnswers({ questions, pageContext }) {
       source: 'ai'
     };
   });
+}
+
+async function generateNetworking({ intent, customIntent, context }) {
+  const settings = await RA.storage.getSettings();
+  if (!settings.apiKey) throw new Error('No API key set. Open the extension options and add one.');
+  const profile = await RA.storage.getProfile();
+  const resume = await RA.storage.getResume();
+  const applicationResumes = await RA.storage.getApplicationResumes();
+  const query = [intent, customIntent, context && context.personName, context && context.role, context && context.company, context && context.visibleContent].filter(Boolean).join(' ');
+  const evidenceText = [resume.text, ...applicationResumes.map((item) => item.text)].filter(Boolean).join('\n\n');
+  const evidence = RA.retrieve(evidenceText, query, 10000);
+  if (!evidence && !RA.profileSummary(profile)) throw new Error('No readable knowledge base or resume context is available.');
+  const body = Object.assign(RA.claudeRequestConfig(settings, 4000, NETWORKING_SCHEMA), {
+    system: RA.buildNetworkingPrompt(settings, profile, evidence, Object.assign({}, context, { customIntent }), intent),
+    messages: [{ role: 'user', content: 'Generate the personalized networking message now.' }]
+  });
+  const parsed = parsedStructuredResponse(await callClaude(settings, body), 'networking message');
+  return {
+    message: String(parsed.message || ''),
+    basis: String(parsed.basis || ''),
+    confidence: RA.clamp(Number(parsed.confidence) || 0, 0, 1)
+  };
 }
 
 /**
@@ -386,6 +419,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       switch (msg && msg.type) {
         case 'GENERATE_ANSWERS':
           sendResponse({ ok: true, answers: await generateAnswers(msg.payload || {}) });
+          break;
+        case 'GENERATE_NETWORKING':
+          sendResponse({ ok: true, result: await generateNetworking(msg.payload || {}) });
           break;
         case 'ANALYZE_MATCH':
           sendResponse(Object.assign({ ok: true }, await analyzeMatch(msg.payload || {})));

@@ -71,6 +71,11 @@ global.fetch = async (url, options) => {
       date: 'August 28, 2026', company: 'Example', role: 'Platform Product Manager', salutation: 'Dear Hiring Team,',
       paragraphs: ['I am applying for this role.', 'My enterprise product experience aligns with the work.', 'I welcome a conversation.'], closing: 'Sincerely,'
     });
+  } else if (schema && schema.properties && schema.properties.message) {
+    payload.content[0].text = JSON.stringify({
+      message: 'Hi John — our shared product background made me curious about your work at Stripe. Would you be open to a brief conversation about the transition?',
+      basis: 'Shared product background and recipient role supplied in context.', confidence: 0.86
+    });
   }
   return { ok: true, status: 200, text: async () => JSON.stringify(payload) };
 };
@@ -123,6 +128,16 @@ function send(message) {
   assert.match(coverPrompt, /thanks the reader/i);
   assert.match(coverPrompt, /Never invent a recipient name/i);
   assert.match(coverPrompt, /active, specific verbs naturally/i);
+
+  const networking = await send({
+    type: 'GENERATE_NETWORKING',
+    payload: {
+      intent: 'Ask for Advice',
+      context: { personName: 'John Smith', role: 'Product Manager', company: 'Stripe', visibleContent: 'Product leadership and platform work.' }
+    }
+  });
+  assert.strictEqual(networking.ok, true);
+  assert.match(networking.result.message, /shared product background/);
 
   const resumePrompt = requests.find((request) => request.body.output_config && request.body.output_config.format && request.body.output_config.format.schema && request.body.output_config.format.schema.properties && request.body.output_config.format.schema.properties.education).body.system;
   assert.match(resumePrompt, /ACTION-VERB DIRECTORY/);
